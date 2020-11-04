@@ -58,7 +58,7 @@ def train():
 
         print("Epoch {} train_loss {} val_accuracy {}".format(e, epoch_loss, val_correct / float(len(ds_test))))
 
-    torch.save(net.state_dict, "model.pth")
+    torch.save(net.state_dict(), "model.pth")
 
 if __name__ == "__main__":
     train()
