@@ -15,41 +15,60 @@ continous_columns = ['age', 'fnlwgt', 'educational-num', 'capital-gain','capital
 class Adult(Dataset):
 
     def __init__(self, path, train=True, subset_size=None, transform=None):
+        # TODO: Remove lines with missing values
         ds_train = pd.read_csv('dataset/adult.data', sep=",\s", header=None, names = column_names, engine = 'python')
         ds_test = pd.read_csv('dataset/adult.test', sep=",\s", header=None, names = column_names, engine = 'python')
         ds_test['income'].replace(regex=True,inplace=True,to_replace=r'\.',value=r'')
 
         adult_complete = pd.concat([ds_test,ds_train])
         adult_complete['income'] = adult_complete['income'].astype('category').cat.codes
+        adult_complete = self.normalize(adult_complete)
 
         adult_onehot = self.to_one_hot(adult_complete, categorical_columns)
-        
-        adult_complete = self.normalize(adult_complete)
         adult_onehot = self.normalize(adult_onehot)
 
         self.train = train
 
-        if self.train:
-            self.data_onehot = adult_onehot[len(ds_test):]
-            self.data_original = adult_complete[len(ds_test):]
+        if subset_size is not None:
+            self.subset_size = subset_size
         else:
-            self.data_onehot = adult_onehot[:len(ds_test)]
-            self.data_original = adult_complete[:len(ds_test)]
+            self.subset_size = len(adult_complete)
+
+        perm = np.random.permutation(len(adult_complete))[:self.subset_size]
+
+        if self.train:
+            complete_set = adult_complete.iloc[perm][len(ds_test):]
+            onehot_set = adult_onehot.iloc[perm][len(ds_test):]
+        else:
+            complete_set = adult_complete.iloc[perm][:len(ds_test)]
+            onehot_set = adult_onehot.iloc[perm][:len(ds_test)]
+
+        self.pd_X = complete_set.drop(columns=['income'], axis=1)
+        self.pd_y = complete_set['income']
+
+        self.pd_X_onehot = onehot_set.drop(columns=['income'], axis=1)
+        self.pd_y_onehot = complete_set['income']
+        self.np_X_onehot = self.pd_X_onehot.to_numpy()
+        self.np_y_onehot = self.pd_y_onehot.to_numpy()        
+        self.pt_X_onehot = torch.tensor(self.pd_X_onehot.to_numpy()).float()
+        self.pt_y_onehot = torch.tensor(self.pd_y_onehot.to_numpy()).long()
 
         del adult_complete
         del adult_onehot
         del ds_train
         del ds_test
 
-        if subset_size is not None:
-            self.subset_size = subset_size
-        else:
-            self.subset_size = len(self.data_onehot)
+    def numpy(self):
+        return self.np_X_onehot, self.np_y_onehot
 
-        perm = np.random.permutation(self.subset_size)
-        self.data_onehot = self.data_onehot.iloc[list(perm)]
-        self.y = self.data_onehot['income']
-        self.X = self.data_onehot.drop(columns=['income'], axis=1)
+    def torch(self):
+        return self.pt_X_onehot, self.pt_y_onehot
+
+    def pandas(self, onehot=False):
+        if onehot:
+            return self.pd_X_onehot, self.pd_y_onehot
+        else:
+            return self.pd_X, self.pd_y
 
     def normalize(self, df):
         result = df.copy()
@@ -66,12 +85,10 @@ class Adult(Dataset):
 
     def get_original_features(self):
         # remove label
-        to_return = self.data_original.drop(columns=['income'], axis=1)
-        to_return = to_return.iloc[list(range(self.__len__()))]
-        return to_return
+        return self.pd_X
 
     def __len__(self):
-        return len(self.data_onehot)
+        return len(self.pd_X)
 
     def __getitem__(self, idx):
-        return {'x': torch.from_numpy(self.X.iloc[idx].to_numpy()).float(), 'y': torch.tensor(self.y.iloc[idx]).long()}
+        return {'x': self.pt_X_onehot[idx], 'y': self.pt_y_onehot[idx]}

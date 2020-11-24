@@ -17,9 +17,9 @@ class Net(nn.Module):
         return self.softmax(self.fc2(x))
 
 def train():
-    learning_rate = 1e-2
-    batch_size = 128
-    epochs = 5
+    learning_rate = 1e-3
+    batch_size = 512
+    epochs = 50
 
     ds_train = Adult('dataset', train=True)
     ds_test = Adult('dataset', train=False)
