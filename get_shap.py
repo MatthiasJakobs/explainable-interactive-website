@@ -2,6 +2,8 @@ import shap
 import torch
 import numpy as np
 
+from os.path import exists
+
 from model import Net
 from dataset.adult import Adult
 from dataset.preprocess_adult import categorical_columns, column_names, continous_columns
@@ -55,24 +57,32 @@ for i in range(len(a_test)):
     ds_test[i] = a_test[i]['x']
     labels_test[i] = a_test[i]['y']
 
-e = shap.GradientExplainer(net, ds_train)
+if not exists('shaps.pt'):
 
-# For testing: first 3 datapoints
-datapoints_to_test = ds_test[:3]
+    e = shap.GradientExplainer(net, ds_train)
 
-shaps = torch.tensor(e.shap_values(datapoints_to_test))
-shaps = shaps.permute(1,0,2)
+    shaps = torch.tensor(e.shap_values(ds_test))
+    shaps = shaps.permute(1,0,2)
 
-predictions = torch.argmax(net(datapoints_to_test), dim=-1)
+    predictions = torch.argmax(net(ds_test), dim=-1)
 
-# get only shapley values for f_i(x) where i is prediction
-tmp = []
-for i in range(3):
-    s = shaps[i]
-    s = s[predictions[i].item()].unsqueeze(0)
-    tmp.append(s)
-shaps = torch.cat(tmp, 0)
+    # get only shapley values for f_i(x) where i is prediction
+    tmp = []
+    for i in range(len(ds_test)):
+        s = shaps[i]
+        s = s[predictions[i].item()].unsqueeze(0)
+        tmp.append(s)
+    shaps = torch.cat(tmp, 0)
 
-# sum all shapley values on one-hot encoded categorical variables
+
+    torch.save(shaps, 'shaps.pt')
+else:
+    shaps = torch.load('shaps.pt')
+
 shaps = sum_shapley_values(shaps, indices_1h)
-print(shaps)
+if shaps.requires_grad:
+    shaps = shaps.detach().numpy()
+else:
+    shaps = shaps.numpy()
+ds = a_test.get_original_features()
+shap.summary_plot(shaps, ds)
