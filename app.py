@@ -1,3 +1,5 @@
+import json
+
 from umap import UMAP
 import numpy as np
 import torch
@@ -33,25 +35,43 @@ class Data:
         for i in range(len(a_test)):
             self.test[i] = a_test[i]['x']
             self.labels_test[i] = a_test[i]['y']
-        
-        # self.pred_test = torch.argmax(net(self.test), dim=-1)
+
+    def repr(self, point_id):
+        return str(self.test[point_id])
 
 class VisualState:
 
     def __init__(self, data):
         self.data = data
+        self.predictions = self.data.labels_test
         self.umap_2d = UMAP(random_state=0)
+
+    def get_point_id(self, interaction_data):
+        curve_number = interaction_data['curveNumber']
+        label = float(self.fig['data'][curve_number]['name'])
+        return np.where(self.predictions == label)[0][interaction_data['pointNumber']]
 
     def create_fig(self):
         self.projections = self.umap_2d.fit_transform(self.data.test)
         self.fig = make_subplots(rows=1, cols=1)
-        for label in np.unique(self.data.labels_test):
-            where = np.random.choice(np.where(self.data.labels_test == label)[0], 1000)
+        for label in np.unique(self.predictions):
+            where = np.random.choice(np.where(self.predictions == label)[0], 1000)
             self.fig.add_trace(
                 go.Scatter(x=self.projections[where, 0], y=self.projections[where, 1],
                         name=str(label), mode='markers'
                 ), row=1, col=1)
+        self.fig.update_layout(clickmode='event+select')
         return self.fig
+
+    def update_selected_data(self, selected_data):
+        if selected_data is not None:
+            rep = {}
+            for point in selected_data['points']:
+                point_id = int(self.get_point_id(point))
+                rep[point_id] = self.data.repr(point_id)
+            return json.dumps(rep)
+        return json.dumps(None)
+
 
 class Visualization(dash.Dash):
 
@@ -59,6 +79,9 @@ class Visualization(dash.Dash):
         super().__init__(__name__)#, external_stylesheets=external_stylesheets)
         self.state = VisualState(data)
         self._setup_page()
+        self.callback(
+            Output('data-info', "children"),
+            [Input("figure", "selectedData")]) (self.state.update_selected_data)
 
     def _setup_page(self):
         self.layout = html.Div([
@@ -67,6 +90,12 @@ class Visualization(dash.Dash):
                 id='figure',
                 figure=self.state.create_fig()
             ),
+            html.Div([
+                dcc.Markdown("""
+                    **Selected Data**
+                """),
+                html.Div(id='data-info')
+            ])
         ])
 
 if __name__ == "__main__":
