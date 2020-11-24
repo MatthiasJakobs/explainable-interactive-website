@@ -51,6 +51,14 @@ class Adult(Dataset):
         self.y = self.data_onehot['income']
         self.X = self.data_onehot.drop(columns=['income'], axis=1)
 
+        # create data that can be directly used with Pytorch
+        self.X_pth = torch.zeros(len(self), *self[0]['x'].shape)
+        self.y_pth = torch.zeros(len(self), *self[0]['y'].shape)
+
+        for i in range(len(self)):
+            self.X_pth[i] = self[i]['x']
+            self.y_pth[i] = self[i]['y']
+
     def normalize(self, df):
         result = df.copy()
         for feature_name in continous_columns:
