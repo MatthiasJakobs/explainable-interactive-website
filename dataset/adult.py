@@ -75,3 +75,6 @@ class Adult(Dataset):
 
     def __getitem__(self, idx):
         return {'x': torch.from_numpy(self.X.iloc[idx].to_numpy()).float(), 'y': torch.tensor(self.y.iloc[idx]).long()}
+
+    def as_json(self, idx):
+        return {key:str(value) for key, value in self.data_original.iloc[idx].to_dict().items()}
