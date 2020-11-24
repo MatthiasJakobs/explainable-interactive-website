@@ -7,60 +7,67 @@ import torch
 import dash
 import dash_core_components as dcc
 import dash_html_components as html
-from dash.dependencies import Input, Output
+from dash.dependencies import Input, Output, State
 import plotly.express as px
 from plotly.subplots import make_subplots
 import plotly.graph_objects as go
-# from plotly.colors import qualitative
 
 from dataset.adult import Adult
 from model import Net
-
-class Data:
-    def __init__(self):
-        self.net = Net()
-        self.net.load_state_dict(torch.load("model.pth"))
-
-        a_train = Adult("dataset", train=True)
-        a_test = Adult("dataset", train=False)
-
-        self.train = torch.zeros(len(a_train), *a_train[0]['x'].shape)
-        self.test = torch.zeros(len(a_test), *a_test[0]['x'].shape)
-        self.labels_test = torch.zeros(len(a_test), *a_test[0]['y'].shape)
-
-        # indices_1h = get_categorical_indices(a_train.X, categorical_columns)
-
-        for i in range(len(a_train)):
-            self.train[i] = a_train[i]['x']
-        for i in range(len(a_test)):
-            self.test[i] = a_test[i]['x']
-            self.labels_test[i] = a_test[i]['y']
-
-    def repr(self, point_id):
-        return str(self.test[point_id])
 
 class VisualState:
 
     def __init__(self, data):
         self.data = data
-        self.predictions = self.data.labels_test
         self.umap_2d = UMAP(random_state=0)
+        self.projections = self.umap_2d.fit_transform(self.data.X)
+        self.net = Net()
+        self.pred = np.array(torch.argmax(self.net(self.data.X_pth), dim=-1))
+        self.confuse = np.zeros_like(self.data.y).astype(str)
+        self.confuse[self.data.y == self.pred] = 'CORRECT'
+        self.confuse[self.data.y != self.pred] = 'WRONG'
 
     def get_point_id(self, interaction_data):
         curve_number = interaction_data['curveNumber']
         label = float(self.fig['data'][curve_number]['name'])
-        return np.where(self.predictions == label)[0][interaction_data['pointNumber']]
+        return np.where(self.data.y == label)[0][interaction_data['pointNumber']]
 
-    def create_fig(self):
-        self.projections = self.umap_2d.fit_transform(self.data.test)
+    def update_figure(self, value, relayout_data):
+        if 'PRED' in value:
+            return self.create_fig(use_prediction=True, relayout_data=relayout_data)
+        return self.create_fig(relayout_data=relayout_data)
+
+    def create_fig(self, use_prediction=False, relayout_data=None):
         self.fig = make_subplots(rows=1, cols=1)
-        for label in np.unique(self.predictions):
-            where = np.random.choice(np.where(self.predictions == label)[0], 1000)
+        if use_prediction:
+            y = self.confuse
+        else:
+            y = self.data.y
+        # plot traces
+        for label in np.unique(y):
+            where = y == label
             self.fig.add_trace(
                 go.Scatter(x=self.projections[where, 0], y=self.projections[where, 1],
                         name=str(label), mode='markers'
                 ), row=1, col=1)
         self.fig.update_layout(clickmode='event+select')
+        # maintain zoom
+        if relayout_data is not None:
+            if 'xaxis.range[0]' in relayout_data:
+                self.fig['layout']['xaxis']['range'] = [
+                    relayout_data['xaxis.range[0]'],
+                    relayout_data['xaxis.range[1]']
+                ]
+            if 'yaxis.range[0]' in relayout_data:
+                self.fig['layout']['yaxis']['range'] = [
+                    relayout_data['yaxis.range[0]'],
+                    relayout_data['yaxis.range[1]']
+                ]
+        # place legend
+        self.fig.update_layout(legend=dict(
+            yanchor="top", y=0.99,
+            xanchor="left", x=0.01
+        ))
         return self.fig
 
     def update_selected_data(self, selected_data):
@@ -68,10 +75,9 @@ class VisualState:
             rep = {}
             for point in selected_data['points']:
                 point_id = int(self.get_point_id(point))
-                rep[point_id] = self.data.repr(point_id)
-            return json.dumps(rep)
+                rep[point_id] = self.data.as_json(point_id)
+            return json.dumps(rep, indent=4)
         return json.dumps(None)
-
 
 class Visualization(dash.Dash):
 
@@ -82,6 +88,10 @@ class Visualization(dash.Dash):
         self.callback(
             Output('data-info', "children"),
             [Input("figure", "selectedData")]) (self.state.update_selected_data)
+        self.callback(
+            Output('figure', 'figure'),
+            Input('switch_displayed_data', 'value'),
+            State('figure', 'relayoutData')) (self.state.update_figure)
 
     def _setup_page(self):
         self.layout = html.Div([
@@ -90,15 +100,22 @@ class Visualization(dash.Dash):
                 id='figure',
                 figure=self.state.create_fig()
             ),
+            dcc.Checklist(
+                id='switch_displayed_data',
+                options=[
+                    {'label': 'Show Predictions', 'value': 'PRED'},
+                ],
+                value=[]
+            ),
             html.Div([
                 dcc.Markdown("""
                     **Selected Data**
                 """),
-                html.Div(id='data-info')
+                html.Pre(id='data-info')
             ])
         ])
 
 if __name__ == "__main__":
-    data = Data()
+    data = Adult('', False, 500)
     app = Visualization(data)
     app.run_server(debug=False)

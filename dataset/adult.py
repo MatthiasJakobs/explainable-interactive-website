@@ -70,6 +70,14 @@ class Adult(Dataset):
         else:
             return self.pd_X, self.pd_y
 
+        # create data that can be directly used with Pytorch
+        self.X_pth = torch.zeros(len(self), *self[0]['x'].shape)
+        self.y_pth = torch.zeros(len(self), *self[0]['y'].shape)
+
+        for i in range(len(self)):
+            self.X_pth[i] = self[i]['x']
+            self.y_pth[i] = self[i]['y']
+
     def normalize(self, df):
         result = df.copy()
         for feature_name in continous_columns:
@@ -92,3 +100,6 @@ class Adult(Dataset):
 
     def __getitem__(self, idx):
         return {'x': self.pt_X_onehot[idx], 'y': self.pt_y_onehot[idx]}
+
+    def as_json(self, idx):
+        return {key:str(value) for key, value in self.data_original.iloc[idx].to_dict().items()}
