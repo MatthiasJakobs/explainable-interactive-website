@@ -7,7 +7,7 @@ import torch
 import dash
 import dash_core_components as dcc
 import dash_html_components as html
-from dash.dependencies import Input, Output
+from dash.dependencies import Input, Output, State
 import plotly.express as px
 from plotly.subplots import make_subplots
 import plotly.graph_objects as go
@@ -32,17 +32,18 @@ class VisualState:
         label = float(self.fig['data'][curve_number]['name'])
         return np.where(self.data.y == label)[0][interaction_data['pointNumber']]
 
-    def update_figure(self, value):
+    def update_figure(self, value, relayout_data):
         if 'PRED' in value:
-            return self.create_fig(use_prediction=True)
-        return self.create_fig()
+            return self.create_fig(use_prediction=True, relayout_data=relayout_data)
+        return self.create_fig(relayout_data=relayout_data)
 
-    def create_fig(self, use_prediction=False):
+    def create_fig(self, use_prediction=False, relayout_data=None):
         self.fig = make_subplots(rows=1, cols=1)
         if use_prediction:
             y = self.confuse
         else:
             y = self.data.y
+        # plot traces
         for label in np.unique(y):
             where = y == label
             self.fig.add_trace(
@@ -50,6 +51,23 @@ class VisualState:
                         name=str(label), mode='markers'
                 ), row=1, col=1)
         self.fig.update_layout(clickmode='event+select')
+        # maintain zoom
+        if relayout_data is not None:
+            if 'xaxis.range[0]' in relayout_data:
+                self.fig['layout']['xaxis']['range'] = [
+                    relayout_data['xaxis.range[0]'],
+                    relayout_data['xaxis.range[1]']
+                ]
+            if 'yaxis.range[0]' in relayout_data:
+                self.fig['layout']['yaxis']['range'] = [
+                    relayout_data['yaxis.range[0]'],
+                    relayout_data['yaxis.range[1]']
+                ]
+        # place legend
+        self.fig.update_layout(legend=dict(
+            yanchor="top", y=0.99,
+            xanchor="left", x=0.01
+        ))
         return self.fig
 
     def update_selected_data(self, selected_data):
@@ -72,7 +90,8 @@ class Visualization(dash.Dash):
             [Input("figure", "selectedData")]) (self.state.update_selected_data)
         self.callback(
             Output('figure', 'figure'),
-            [Input('switch_displayed_data', 'value')]) (self.state.update_figure)
+            Input('switch_displayed_data', 'value'),
+            State('figure', 'relayoutData')) (self.state.update_figure)
 
     def _setup_page(self):
         self.layout = html.Div([
@@ -97,6 +116,6 @@ class Visualization(dash.Dash):
         ])
 
 if __name__ == "__main__":
-    data = Adult('', False, 1000)
+    data = Adult('', False, 500)
     app = Visualization(data)
     app.run_server(debug=False)
