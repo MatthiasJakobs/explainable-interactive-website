@@ -102,4 +102,4 @@ class Adult(Dataset):
         return {'x': self.pt_X_onehot[idx], 'y': self.pt_y_onehot[idx]}
 
     def as_json(self, idx):
-        return {key:str(value) for key, value in self.data_original.iloc[idx].to_dict().items()}
+        return {key:str(value) for key, value in self.pd_X.iloc[idx].to_dict().items()}
