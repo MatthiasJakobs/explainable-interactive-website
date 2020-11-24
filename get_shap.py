@@ -5,8 +5,7 @@ import numpy as np
 from os.path import exists
 
 from model import Net
-from dataset.adult import Adult
-from dataset.preprocess_adult import categorical_columns, column_names, continous_columns
+from dataset.adult import Adult, categorical_columns, column_names, continous_columns
 
 def get_categorical_indices(df, categories):
     # get the indicies in the feature vector for each categorical variable.
