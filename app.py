@@ -20,17 +20,18 @@ class VisualState:
     def __init__(self, data):
         self.data = data
         self.umap_2d = UMAP(random_state=0)
-        self.projections = self.umap_2d.fit_transform(self.data.X)
+        self.projections = self.umap_2d.fit_transform(self.data.numpy()[0])
         self.net = Net()
-        self.pred = np.array(torch.argmax(self.net(self.data.X_pth), dim=-1))
-        self.confuse = np.zeros_like(self.data.y).astype(str)
-        self.confuse[self.data.y == self.pred] = 'CORRECT'
-        self.confuse[self.data.y != self.pred] = 'WRONG'
+        self.pred = np.array(torch.argmax(self.net(self.data.torch()[0]), dim=-1))
+        self.confuse = np.zeros_like(self.pred).astype(str)
+        correct = self.data.numpy()[1] == self.pred
+        self.confuse[correct] = 'CORRECT'
+        self.confuse[np.invert(correct)] = 'WRONG'
 
     def get_point_id(self, interaction_data):
         curve_number = interaction_data['curveNumber']
         label = float(self.fig['data'][curve_number]['name'])
-        return np.where(self.data.y == label)[0][interaction_data['pointNumber']]
+        return np.where(self.data.numpy()[1] == label)[0][interaction_data['pointNumber']]
 
     def update_figure(self, value, relayout_data):
         if 'PRED' in value:
@@ -42,7 +43,7 @@ class VisualState:
         if use_prediction:
             y = self.confuse
         else:
-            y = self.data.y
+            y = self.data.numpy()[1]
         # plot traces
         for label in np.unique(y):
             where = y == label
