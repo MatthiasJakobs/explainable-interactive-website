@@ -3,6 +3,7 @@ import torch
 import numpy as np
 
 from os.path import exists
+from shap.utils._legacy import DenseData
 
 from model import Net
 from dataset.adult import Adult, categorical_columns, column_names, continous_columns
@@ -37,51 +38,58 @@ def sum_shapley_values(shaps, indices):
             new_shaps[item][i+nr_continuous] = torch.sum(sliced)            
 
     return new_shaps
-               
+
+# Model wrapper for KernelExplainer
+def f(x):
+    net.eval()
+    x = torch.tensor(x).float()
+    with torch.no_grad():
+        return net(x).numpy()
+
 net = Net()
 net.load_state_dict(torch.load("model.pth"))
 
 a_train = Adult("dataset", train=True)
 a_test = Adult("dataset", train=False)
 
-ds_train = torch.zeros(len(a_train), *a_train[0]['x'].shape)
-ds_test = torch.zeros(len(a_test), *a_test[0]['x'].shape)
-labels_test = torch.zeros(len(a_test), *a_test[0]['y'].shape)
+np_test_x, np_test_y = a_test.numpy()
 
-indices_1h = get_categorical_indices(a_train.X, categorical_columns)
+indices_1h = get_categorical_indices(a_train.pd_X_onehot, categorical_columns)
 
-for i in range(len(a_train)):
-    ds_train[i] = a_train[i]['x']
-for i in range(len(a_test)):
-    ds_test[i] = a_test[i]['x']
-    labels_test[i] = a_test[i]['y']
+# Restrict to a random subset for faster computation (KernelShap is slow)
+subset_size = 100
+subset_indices = np.random.permutation(len(np_test_x))[:subset_size]
 
 if not exists('shaps.pt'):
 
-    e = shap.GradientExplainer(net, ds_train)
+    # Wrap data in a DenseData object, which allows one-hot categorical values to be treated as a group
+    group_names = [[0],[0],[0],[0],[0],[0]] + [list(range(end-start+1)) for start, end in indices_1h]
+    
+    # This is not an error. They look into the first element of *args for group names...
+    data = DenseData(shap.sample(np_test_x), group_names, group_names)
 
-    shaps = torch.tensor(e.shap_values(ds_test))
+    e = shap.KernelExplainer(f, data)
+
+    shaps = torch.tensor(e.shap_values(np_test_x[subset_indices]))
     shaps = shaps.permute(1,0,2)
 
-    predictions = torch.argmax(net(ds_test), dim=-1)
+    predictions = torch.argmax(torch.tensor(f(np_test_x[subset_indices])).float(), dim=-1)
 
     # get only shapley values for f_i(x) where i is prediction
     tmp = []
-    for i in range(len(ds_test)):
+    for i in range(subset_size):
         s = shaps[i]
         s = s[predictions[i].item()].unsqueeze(0)
         tmp.append(s)
     shaps = torch.cat(tmp, 0)
 
-
     torch.save(shaps, 'shaps.pt')
 else:
     shaps = torch.load('shaps.pt')
 
-shaps = sum_shapley_values(shaps, indices_1h)
 if shaps.requires_grad:
     shaps = shaps.detach().numpy()
 else:
     shaps = shaps.numpy()
-ds = a_test.get_original_features()
-shap.summary_plot(shaps, ds)
+
+shap.summary_plot(shaps, a_test.pd_X.iloc[subset_indices])

@@ -10,7 +10,7 @@ class Net(nn.Module):
 
         self.fc1 = nn.Linear(108, 256)
         self.fc2 = nn.Linear(256, 2)
-        self.softmax = nn.Softmax()
+        self.softmax = nn.Softmax(dim=-1)
 
     def forward(self, x):
         x = F.relu(self.fc1(x))

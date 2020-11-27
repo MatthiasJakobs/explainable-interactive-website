@@ -25,7 +25,7 @@ class Adult(Dataset):
         adult_complete = self.normalize(adult_complete)
 
         adult_onehot = self.to_one_hot(adult_complete, categorical_columns)
-        adult_onehot = self.normalize(adult_onehot)
+        #adult_onehot = self.normalize(adult_onehot)
 
         self.train = train
 
