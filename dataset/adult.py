@@ -103,3 +103,15 @@ class Adult(Dataset):
 
     def as_json(self, idx):
         return {key:str(value) for key, value in self.pd_X.iloc[idx].to_dict().items()}
+
+    def get_categorical_choices(self):
+        categorical_choices = {}
+        for category in categorical_columns:
+           categorical_choices[category] = self.pd_X[category].unique()
+        return categorical_choices
+
+    def get_column_names(self):
+        return column_names[:-1]
+
+    def get_categorical_column_names(self):
+        return categorical_columns

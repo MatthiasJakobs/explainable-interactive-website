@@ -8,6 +8,7 @@ import dash
 import dash_core_components as dcc
 import dash_html_components as html
 from dash.dependencies import Input, Output, State
+import dash_table
 import plotly.express as px
 from plotly.subplots import make_subplots
 import plotly.graph_objects as go
@@ -80,19 +81,34 @@ class VisualState:
             return json.dumps(rep, indent=4)
         return json.dumps(None)
 
+    def update_table(self, selected_data):
+        if selected_data is not None:
+            sel_idcs = []
+            for point in selected_data['points']:
+                point_id = int(self.get_point_id(point))
+                sel_idcs.append(point_id)
+            pdout = self.data.pd_X.iloc[sel_idcs]
+            pdout['pred'] = [self.pred[i] for i in sel_idcs]
+            return pdout.to_dict('records')
+
+
 class Visualization(dash.Dash):
 
     def __init__(self, data):
         super().__init__(__name__)#, external_stylesheets=external_stylesheets)
+        self.data = data
         self.state = VisualState(data)
         self._setup_page()
-        self.callback(
-            Output('data-info', "children"),
-            [Input("figure", "selectedData")]) (self.state.update_selected_data)
+        # self.callback(
+        #     Output('data-info', "children"),
+        #     [Input("figure", "selectedData")]) (self.state.update_selected_data)
         self.callback(
             Output('figure', 'figure'),
             Input('switch_displayed_data', 'value'),
             State('figure', 'relayoutData')) (self.state.update_figure)
+        self.callback(
+            Output('table', 'data'),
+            Input('figure', 'selectedData')) (self.state.update_table)
 
     def _setup_page(self):
         self.layout = html.Div([
@@ -108,12 +124,37 @@ class Visualization(dash.Dash):
                 ],
                 value=[]
             ),
+            # Table
             html.Div([
-                dcc.Markdown("""
-                    **Selected Data**
-                """),
-                html.Pre(id='data-info')
+                dash_table.DataTable(
+                    id='table',
+                    data=None,
+                    columns = [{"name": col, "id": col, 'presentation': 'dropdown'} if (col in self.data.get_categorical_column_names()) else {"name": col, "id": col} for col in self.data.get_column_names()] + [{"name": 'pred', "id": 'pred'}],
+                    editable=True,
+                    dropdown = {category:{'options': [{'label': i, 'value': i} for i in choices]} for category,choices in self.data.get_categorical_choices().items()},
+                    style_data_conditional=[
+                        {
+                            'if': {'filter_query': '{pred} = 0', 'column_id': 'pred'},
+                            'backgroundColor': 'blue', 'color': 'white'
+                        },
+                        {
+                            'if': {'filter_query': '{pred} = 1', 'column_id': 'pred'},
+                            'backgroundColor': 'red', 'color': 'white'
+                        },
+                    ]
+                ),
+                html.Div(id='table-dropdown-container')
+            ]),
+            # Apply button
+            html.Div([
+                html.Button('Apply changes', id='apply-button', n_clicks=0),
             ])
+            # html.Div([
+            #     dcc.Markdown("""
+            #         **Selected Data**
+            #     """),
+            #     html.Pre(id='data-info')
+            # ])
         ])
 
 if __name__ == "__main__":
