@@ -58,7 +58,6 @@ class VisualState:
                 point_id = self.remap_idc[(point['curveNumber'], point['pointNumber'])]
             except KeyError:
                 point_id = int(self.get_point_id(point))
-            print(point_id, point['curveNumber'], point['pointNumber'])
             sel_idcs.append(point_id)
         return sel_idcs
 
@@ -86,18 +85,6 @@ class VisualState:
             label_idc = np.where(self.y == label)[0]
             select = np.array([np.where(label_idc == point)[0] for point in self.selection if np.any(label_idc == point)]).flatten()
             self.fig.update_traces(selectedpoints=select, selector=dict(name=str(label)))
-        # if changed_id == 'apply-button.n_clicks':
-        #     print(selected_data)
-        #     print(self.selection)
-        # if changed_id == 'apply-button.n_clicks':
-            # override selection data for figure
-            # selected_data = {'points':[]}
-            # for trace_no, trace in enumerate(self.fig['data']):
-            #     for point_no in trace['selectedpoints']:
-            #         selected_data['points'].append({
-            #             'curveNumber': trace_no,
-            #             'pointNumber': point_no
-            #         })
         return self.fig, self.selection
 
     def update_data(self, table_data):
@@ -135,6 +122,7 @@ class VisualState:
                     relayout_data['yaxis.range[0]'],
                     relayout_data['yaxis.range[1]']
                 ]
+        # set legend position and selectability
         self.fig.update_layout(
             legend=dict(
                 yanchor="top", y=0.99,
