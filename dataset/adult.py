@@ -80,11 +80,40 @@ class Adult(Dataset):
 
     def normalize(self, df):
         result = df.copy()
+        self.mean_std = {}
         for feature_name in continous_columns:
             mean = df[feature_name].mean()
             std = df[feature_name].std()
+            self.mean_std[feature_name] = {}
+            self.mean_std[feature_name]['mean'] = mean
+            self.mean_std[feature_name]['std'] = std
             result[feature_name] = (df[feature_name] - mean) / (std)
         return result
+
+    def denormalize(self, x):
+        # only works with numpy and pytorch vectors
+        nr_features = x.shape[-1]
+        if isinstance(x, type(torch.zeros(1))):
+            round_fn = torch.round
+        else:
+            round_fn = np.round
+
+        if nr_features == 13:
+            continuous_indices = [0, 2, 4, 10, 11, 12]
+            for i, c_indx in enumerate(continuous_indices):
+                name = continous_columns[i]
+                mean = self.mean_std[name]['mean']
+                std = self.mean_std[name]['std']
+                x[:, c_indx] = round_fn(x[:, i] * std + mean)
+        else:
+            print('is one hot')
+            # one-hot vectors
+            for i, name in enumerate(continous_columns):
+                mean = self.mean_std[name]['mean']
+                std = self.mean_std[name]['std']
+                x[:, i] = round_fn(x[:, i] * std + mean)
+
+        return x
 
     def to_one_hot(self, df, df_cols):
         df_1 = df.drop(columns=df_cols, axis=1)
