@@ -1,0 +1,27 @@
+.cont-grid {
+    display: grid;
+    grid-template-rows: 400px auto auto;
+    grid-template-columns: auto auto auto auto;
+}
+
+.cont-graph {
+    grid-row: 1 / 2;
+    grid-column: 1 / 4;
+}
+
+.cont-graph-custom {
+    grid-row: 1 / 2;
+    grid-column: 4 / 5;
+    display: flex;
+    flex-direction: column;
+}
+
+.cont-table {
+    grid-row: 2 / 3;
+    grid-column: 1 / 5;
+}
+
+.cont-apply {
+    grid-row: 3 / 4;
+    grid-column: 1 / 2;
+}

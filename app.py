@@ -82,10 +82,12 @@ class VisualState:
                     relayout_data['yaxis.range[1]']
                 ]
         # place legend
-        self.fig.update_layout(legend=dict(
-            yanchor="top", y=0.99,
-            xanchor="left", x=0.01
-        ))
+        self.fig.update_layout(
+            legend=dict(
+                yanchor="top", y=0.99,
+                xanchor="left", x=0.01
+            ),
+            margin={'t': 0, 'b': 0, 'l': 0, 'r': 0})
         return self.fig
 
     def update_selected_data(self, selected_data):
@@ -116,9 +118,6 @@ class Visualization(dash.Dash):
         self.state = VisualState(data, models)
         self.model_names = [model.__class__.__name__ for model in models]
         self._setup_page()
-        # self.callback(
-        #     Output('data-info', "children"),
-        #     [Input("figure", "selectedData")]) (self.state.update_selected_data)
         self.callback(
             Output('figure', 'figure'),
             [Input('switch_displayed_data', 'value'), Input('apply-button', 'n_clicks'), Input('model-select', 'value')],
@@ -129,26 +128,32 @@ class Visualization(dash.Dash):
 
 
     def _setup_page(self):
-        self.layout = html.Div([
-            # PLOTS
-            dcc.Graph(
-                id='figure',
-                figure=self.state.create_fig()
-            ),
-            dcc.Checklist(
-                id='switch_displayed_data',
-                options=[
-                    {'label': 'Show Predictions', 'value': 'PRED'},
-                ],
-                value=[]
-            ),
-            dcc.Dropdown(
-                id='model-select',
-                options=[{'label': mname, 'value': mname} for mname in self.model_names],
-                value=self.model_names[0]
-            ),
+        self.layout = html.Div(className='cont-grid', children=[
+            html.Div(className='cont-graph', children=[
+                dcc.Graph(
+                    id='figure',
+                    responsive=True,
+                    config={'responsive': True},
+                    style={'height': '100%', 'width': '100%'},
+                    figure=self.state.create_fig()
+                ),
+            ]),
+            html.Div(className='cont-graph-custom', children=[
+                dcc.Checklist(
+                    id='switch_displayed_data',
+                    options=[
+                        {'label': 'Show Predictions', 'value': 'PRED'},
+                    ],
+                    value=[]
+                ),
+                dcc.Dropdown(
+                    id='model-select',
+                    options=[{'label': mname, 'value': mname} for mname in self.model_names],
+                    value=self.model_names[0]
+                ),      
+            ]),
             # Table
-            html.Div([
+            html.Div(className='cont-table', children=[
                 dash_table.DataTable(
                     id='table',
                     data=None,
@@ -169,15 +174,9 @@ class Visualization(dash.Dash):
                 html.Div(id='table-dropdown-container')
             ]),
             # Apply button
-            html.Div([
+            html.Div(className='cont-apply', children=[
                 html.Button('Apply changes', id='apply-button', n_clicks=0),
             ])
-            # html.Div([
-            #     dcc.Markdown("""
-            #         **Selected Data**
-            #     """),
-            #     html.Pre(id='data-info')
-            # ])
         ])
 
 if __name__ == "__main__":
