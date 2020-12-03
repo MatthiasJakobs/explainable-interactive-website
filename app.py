@@ -151,8 +151,8 @@ class VisualState:
                     for point in selected_data['points']:
                         point_id = int(self.get_point_id(point))
                         sel_idcs.append(point_id)
-                    # TODO shap_values = model.get_shap(sel_idcs)
-                    shap_values = np.random.random(len(sel_idcs) * len(col_names)).reshape((len(sel_idcs), len(col_names)))
+                    shap_values = model.get_shap(sel_idcs, self.data)
+                    # shap_values = np.random.random(len(sel_idcs) * len(col_names)).reshape((len(sel_idcs), len(col_names)))
                     shap_values = np.mean(shap_values, axis=0)
                 else: # nothing selected
                     shap_values = [0 for _ in col_names]
@@ -245,6 +245,6 @@ class Visualization(dash.Dash):
 
 if __name__ == "__main__":
     data = Adult('', False, 500)
-    models = [FcNet(), RandomForest()]
+    models = [RandomForest()]
     app = Visualization(data, models)
     app.run_server(debug=False)
