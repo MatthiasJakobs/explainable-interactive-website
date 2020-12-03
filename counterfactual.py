@@ -11,7 +11,6 @@ def generate_CF(instance):
     d = dice_ml.Data(dataframe=ds, continuous_features=continous_columns, outcome_name='income')
     backend = 'PYT'
     model = FcNet()
-    # TODO: Load weights
     m = dice_ml.Model(model=model, backend=backend)
     exp = dice_ml.Dice(d, m)
     instance = pd.DataFrame.to_dict(instance,orient ='record')
