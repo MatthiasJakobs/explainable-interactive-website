@@ -26,6 +26,7 @@ class VisualState:
         self.umap_2d = UMAP(random_state=0)
         self.projections = self.umap_2d.fit_transform(self.data.numpy()[0]) # TODO maybe better use learned model embeddings here?!
         self.predict()
+        self.y = self.pred
 
     def predict(self):
         for model in self.models:
@@ -38,10 +39,23 @@ class VisualState:
 
     def get_point_id(self, interaction_data):
         curve_number = interaction_data['curveNumber']
-        label = float(self.fig['data'][curve_number]['name'])
-        return np.where(self.data.numpy()[1] == label)[0][interaction_data['pointNumber']]
+        label = np.array([self.fig['data'][curve_number]['name']], dtype=self.y.dtype)
+        return np.where(self.y == label)[0][interaction_data['pointNumber']]
+
+    def get_points_ids(self, selected_data):
+        sel_idcs = []
+        for point in selected_data['points']:
+            point_id = int(self.get_point_id(point))
+            sel_idcs.append(point_id)
+        return sel_idcs
 
     def update_figure(self, display_radio, n_clicks, chosen_model, relayout_data, selected_data, table_data):
+        # check for current selection
+        if selected_data is not None:
+            selected_points = self.get_points_ids(selected_data)
+        else:
+            selected_points = []
+        # get call context
         changed_id = dash.callback_context.triggered[0]['prop_id']
         if changed_id == 'apply-button.n_clicks':
             self.update_data(selected_data, table_data)
@@ -49,15 +63,14 @@ class VisualState:
             self.current_model = chosen_model
             self.predict()
         if 'PRED' in display_radio:
-            return self.create_fig(use_prediction=True, relayout_data=relayout_data)
-        return self.create_fig(relayout_data=relayout_data)
+            self.y = self.confuse
+        else:
+            self.y = self.pred
+        return self.create_fig(relayout_data=relayout_data, selected_points=selected_points)
 
     def update_data(self, selected_data, table_data):
         if selected_data is not None:
-            sel_idcs = []
-            for point in selected_data['points']:
-                point_id = int(self.get_point_id(point))
-                sel_idcs.append(point_id)
+            sel_idcs = self.get_points_ids(selected_data)
         for i,sel in enumerate(sel_idcs):
             del table_data[i]['pred']
             continuous_indices = [0, 2, 4, 10, 11, 12]
@@ -71,18 +84,16 @@ class VisualState:
             self.projections[sel] = self.umap_2d.transform(self.data.numpy()[0][sel].reshape(1, -1))
             # print('after', self.projections[sel], self.data.pd_X.iloc[sel])
 
-    def create_fig(self, use_prediction=False, relayout_data=None):
+    def create_fig(self, relayout_data=None, selected_points=[]):
+        trace_selection = {}
         self.fig = make_subplots(rows=1, cols=1)
-        if use_prediction:
-            y = self.confuse
-        else:
-            y = self.data.numpy()[1]
         # plot traces
-        for label in np.unique(y):
-            where = y == label
+        for label in np.unique(self.y):
+            label_idc = np.where(self.y == label)[0]
+            trace_selection[str(label)] = np.array([np.where(label_idc == point)[0] for point in selected_points if np.any(label_idc == point)]).flatten()
             self.fig.add_trace(
-                go.Scatter(x=self.projections[where, 0], y=self.projections[where, 1],
-                        name=str(label), mode='markers'
+                go.Scatter(x=self.projections[label_idc, 0], y=self.projections[label_idc, 1],
+                           name=str(label), mode='markers'
                 ), row=1, col=1)
         self.fig.update_layout(clickmode='event+select')
         # maintain zoom
@@ -97,6 +108,9 @@ class VisualState:
                     relayout_data['yaxis.range[0]'],
                     relayout_data['yaxis.range[1]']
                 ]
+        # maintain selection
+        for name, points in trace_selection.items():
+            self.fig.update_traces(selectedpoints=points, selector=dict(name=name))
         # place legend
         self.fig.update_layout(
             legend=dict(
@@ -115,12 +129,9 @@ class VisualState:
             return json.dumps(rep, indent=4)
         return json.dumps(None)
 
-    def update_table(self, selected_data):
+    def update_table(self, selected_data, resetbutton_nclick):
         if selected_data is not None:
-            sel_idcs = []
-            for point in selected_data['points']:
-                point_id = int(self.get_point_id(point))
-                sel_idcs.append(point_id)
+            sel_idcs = self.get_points_ids(selected_data)
             pdout = self.data.pd_X.iloc[sel_idcs]
             for i in range(len(sel_idcs)):
                 denorm = self.data.denormalize(pdout.iloc[i].to_numpy())
@@ -164,7 +175,7 @@ class Visualization(dash.Dash):
             [State('figure', 'relayoutData'), State('figure', 'selectedData'), State('table', 'data')]) (self.state.update_figure)
         self.callback(
             Output('table', 'data'),
-            Input('figure', 'selectedData')) (self.state.update_table)
+            [Input('figure', 'selectedData'), Input('reset-button', 'n_clicks')]) (self.state.update_table)
         self.callback(
             Output('fig-shapley', 'figure'),
             Input('figure', 'selectedData')) (self.state.update_shap_fig)
@@ -218,6 +229,7 @@ class Visualization(dash.Dash):
             ]),
             # Apply button
             html.Div(className='cont-apply', children=[
+                html.Button('Reset', id='reset-button', n_clicks=0),
                 html.Button('Apply changes', id='apply-button', n_clicks=0),
             ]),
             html.Div(className='cont-shapley', children=[
