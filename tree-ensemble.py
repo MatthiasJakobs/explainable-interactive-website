@@ -5,31 +5,45 @@ from catboost import CatBoostClassifier, Pool, cv
 from sklearn.metrics import accuracy_score
 
 
-ds_train = Adult(None, train=True)
-ds_test = Adult(None, train=False)
+class RandomForest(CatBoostClassifier):
 
-X_train, y_train = ds_train.pandas()
-X_test, y_test = ds_test.pandas()
+    def __init__(self, use_checkpoint='tree.model', iterations=10000):
+        super().__init__(random_seed=42, custom_loss=['Accuracy'], iterations=iterations, logging_level='Verbose')
+        if use_checkpoint is not None:
+            if exists(use_checkpoint):
+                super().load_model(use_checkpoint)
+                self.fitted = True
+            else:
+                print("Path {} does not contain a valid checkpoint. Will initialize the model randomly".format(use_checkpoint))
+                self.fitted = False
+            
 
-model = CatBoostClassifier(
-    random_seed=42,
-    custom_loss=['Accuracy'],
-    iterations=10000,
-    logging_level='Verbose',
-)
+    def categorical_feature_indices(self, x):
+        return np.where(x.dtypes != np.float)[0]
 
-categorical_features_indices = np.where(X_train.dtypes != np.float)[0]
+    def fit(self, X_train, y_train, **kwargs):
+        if not self.fitted:
+            cat_feature_inds = self.categorical_feature_indices(X_train)
+            super().fit(X_train, y_train, cat_features=cat_feature_inds, **kwargs)
+            super().save_model('tree.model')
+            self.fitted = True
+
+    def predict(self, ds, print_accuracy=False):
+        X, y = ds.pandas()
+        predictions = super().predict(X)
+        if print_accuracy:
+            print(accuracy_score(predictions, y))
+
+        return predictions
 
 
-if not exists('tree.model'):
+if __name__ == "__main__":
+    ds_train = Adult(None, train=True)
+    ds_test = Adult(None, train=False)
 
-    model.fit(X_train, 
-            y_train, 
-            cat_features=categorical_features_indices, 
-            eval_set=(X_test, y_test))
+    X_train, y_train = ds_train.pandas()
+    X_test, y_test = ds_test.pandas()
 
-    model.save_model('tree.model')
-else:
-    model.load_model('tree.model')
-
-print('test accuracy:', accuracy_score(model.predict(X_test), y_test))
+    model = RandomForest()
+    model.fit(X_train, y_train, eval_set=(X_test, y_test))
+    model.predict(ds_test, print_accuracy=True)
