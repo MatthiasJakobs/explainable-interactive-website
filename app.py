@@ -23,7 +23,7 @@ class VisualState:
         self.models = models
         self.current_model = models[0].__class__.__name__
         self.umap_2d = UMAP(random_state=0)
-        self.projections = self.umap_2d.fit_transform(self.data.numpy()[0])
+        self.projections = self.umap_2d.fit_transform(self.data.numpy()[0]) # TODO maybe better use learned model embeddings here?!
         self.predict()
 
     def predict(self):
@@ -41,11 +41,14 @@ class VisualState:
         label = float(self.fig['data'][curve_number]['name'])
         return np.where(self.data.numpy()[1] == label)[0][interaction_data['pointNumber']]
 
-    def update_figure(self, input_data, input2, relayout_data, selected_data, table_data):
+    def update_figure(self, display_radio, n_clicks, chosen_model, relayout_data, selected_data, table_data):
         changed_id = dash.callback_context.triggered[0]['prop_id']
         if changed_id == 'apply-button.n_clicks':
             self.update_data(selected_data, table_data)
-        if 'PRED' in input_data:
+        if changed_id == 'model-select.value':
+            self.current_model = chosen_model
+            self.predict()
+        if 'PRED' in display_radio:
             return self.create_fig(use_prediction=True, relayout_data=relayout_data)
         return self.create_fig(relayout_data=relayout_data)
 
@@ -118,7 +121,7 @@ class Visualization(dash.Dash):
         #     [Input("figure", "selectedData")]) (self.state.update_selected_data)
         self.callback(
             Output('figure', 'figure'),
-            [Input('switch_displayed_data', 'value'), Input('apply-button', 'n_clicks')],
+            [Input('switch_displayed_data', 'value'), Input('apply-button', 'n_clicks'), Input('model-select', 'value')],
             [State('figure', 'relayoutData'), State('figure', 'selectedData'), State('table', 'data')]) (self.state.update_figure)
         self.callback(
             Output('table', 'data'),
@@ -141,8 +144,8 @@ class Visualization(dash.Dash):
             ),
             dcc.Dropdown(
                 id='model-select',
-                options=[{'label': mname, 'value': mname.upper()} for mname in self.model_names],
-                value=self.model_names[0].upper()
+                options=[{'label': mname, 'value': mname} for mname in self.model_names],
+                value=self.model_names[0]
             ),
             # Table
             html.Div([
