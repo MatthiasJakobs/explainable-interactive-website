@@ -118,7 +118,7 @@ class VisualState:
                 xanchor="left", x=0.01
             ),
             margin={'t': 0, 'b': 0, 'l': 0, 'r': 0})
-        return self.fig
+        return self.fig, None
 
     def update_selected_data(self, selected_data):
         if selected_data is not None:
@@ -139,7 +139,7 @@ class VisualState:
             pdout['pred'] = [self.pred[i] for i in sel_idcs]
             return pdout.to_dict('records')
 
-    def update_shap_fig(self, selected_data=None):
+    def update_shap_fig(self, selected_data=None, tmp=None):
         self.fig_shap = go.Figure(layout=go.Layout(
             margin={'t': 0, 'b': 0, 'l': 0, 'r': 0},
         ))
@@ -151,12 +151,14 @@ class VisualState:
                     for point in selected_data['points']:
                         point_id = int(self.get_point_id(point))
                         sel_idcs.append(point_id)
-                    # TODO shap_values = model.get_shap(sel_idcs)
-                    shap_values = np.random.random(len(sel_idcs) * len(col_names)).reshape((len(sel_idcs), len(col_names)))
-                    shap_values = np.mean(shap_values, axis=0)
+                    shap_values = model.get_shap(sel_idcs, self.data)
+                    # shap_values = np.random.random(len(sel_idcs) * len(col_names)).reshape((len(sel_idcs), len(col_names)))
+                    shap_mean = np.mean(shap_values, axis=0)
+                    shap_error = np.std(shap_values, axis=0)
                 else: # nothing selected
-                    shap_values = [0 for _ in col_names]
-                self.fig_shap.add_trace(go.Bar(x=col_names, y=shap_values))
+                    shap_mean = [0 for _ in col_names]
+                    shap_error = [0 for _ in col_names]
+                self.fig_shap.add_trace(go.Bar(x=col_names, y=shap_mean, error_y=dict(type='data', array=shap_error)))
         self.fig_shap.update_xaxes(type='category')
         return self.fig_shap
 
@@ -170,7 +172,7 @@ class Visualization(dash.Dash):
         self.model_names = [model.__class__.__name__ for model in models]
         self._setup_page()
         self.callback(
-            Output('figure', 'figure'),
+            [Output('figure', 'figure'), Output('tmp', 'children')],
             [Input('switch_displayed_data', 'value'), Input('apply-button', 'n_clicks'), Input('model-select', 'value')],
             [State('figure', 'relayoutData'), State('figure', 'selectedData'), State('table', 'data')]) (self.state.update_figure)
         self.callback(
@@ -178,7 +180,7 @@ class Visualization(dash.Dash):
             [Input('figure', 'selectedData'), Input('reset-button', 'n_clicks')]) (self.state.update_table)
         self.callback(
             Output('fig-shapley', 'figure'),
-            Input('figure', 'selectedData')) (self.state.update_shap_fig)
+            [Input('figure', 'selectedData'), Input('tmp', 'children')]) (self.state.update_shap_fig)
 
 
     def _setup_page(self):
@@ -240,11 +242,12 @@ class Visualization(dash.Dash):
                     style={'height': '100%', 'width': '100%'},
                     figure=self.state.update_shap_fig()
                 ),
+                html.Div(id='tmp', style={'display': 'none'})
             ])
         ])
 
 if __name__ == "__main__":
     data = Adult('', False, 500)
-    models = [FcNet(), RandomForest()]
+    models = [RandomForest()]
     app = Visualization(data, models)
     app.run_server(debug=False)
