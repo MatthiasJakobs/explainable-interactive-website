@@ -15,6 +15,7 @@ import plotly.graph_objects as go
 
 from dataset.adult import Adult
 from model import Net
+from tree_ensemble import RandomForest
 
 class VisualState:
 
@@ -181,6 +182,6 @@ class Visualization(dash.Dash):
 
 if __name__ == "__main__":
     data = Adult('', False, 500)
-    models = [Net()]
+    models = [Net(), RandomForest()]
     app = Visualization(data, models)
     app.run_server(debug=False)
