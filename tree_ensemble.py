@@ -36,6 +36,15 @@ class RandomForest(CatBoostClassifier):
 
         return predictions
 
+    def get_shap(self, data_rows, ds):
+        X, y = ds.pandas()
+        X = X.iloc[data_rows]
+        print(X.columns)
+        y = y.iloc[data_rows]
+        categorical_features_indices = self.categorical_feature_indices(X)
+        shap_values = self.get_feature_importance(Pool(X, label=y, cat_features=categorical_features_indices), type="ShapValues")
+        return shap_values[:, :-1]
+
 
 if __name__ == "__main__":
     ds_train = Adult(None, train=True)
@@ -47,3 +56,4 @@ if __name__ == "__main__":
     model = RandomForest()
     model.fit(X_train, y_train, eval_set=(X_test, y_test))
     model.predict(ds_test, print_accuracy=True)
+    shap_values = model.get_shap([1, 10, 100], ds_test)
