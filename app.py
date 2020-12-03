@@ -14,7 +14,7 @@ from plotly.subplots import make_subplots
 import plotly.graph_objects as go
 
 from dataset.adult import Adult
-from model import Net
+from model import FcNet, ConvNet
 from tree_ensemble import RandomForest
 
 class VisualState:
@@ -31,7 +31,8 @@ class VisualState:
         for model in self.models:
             if model.__class__.__name__ == self.current_model:
                 # TODO replace by predict function call
-                self.pred = np.array(torch.argmax(model(self.data.torch()[0]), dim=-1))
+                # self.pred = np.array(torch.argmax(model(self.data.torch()[0]), dim=-1))
+                self.pred = model.predict(self.data)
                 self.confuse = np.zeros_like(self.pred).astype(str)
                 correct = self.data.numpy()[1] == self.pred
                 self.confuse[correct] = 'CORRECT'
@@ -234,6 +235,6 @@ class Visualization(dash.Dash):
 
 if __name__ == "__main__":
     data = Adult('', False, 500)
-    models = [Net(), RandomForest()]
+    models = [FcNet(), RandomForest()]
     app = Visualization(data, models)
     app.run_server(debug=False)
