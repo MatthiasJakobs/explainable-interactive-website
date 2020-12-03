@@ -1,6 +1,7 @@
 import pandas as pd
 import torch
 import dice_ml
+from model import Net
 from dataset.adult import Adult
 
 #generate_CF takes a dictionary as an input which has the column name as its keys and the value as its corresponding values
