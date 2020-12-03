@@ -1,6 +1,6 @@
 .cont-grid {
     display: grid;
-    grid-template-rows: 400px auto auto;
+    grid-template-rows: 300px auto auto 300px;
     grid-template-columns: auto auto auto auto;
 }
 
@@ -24,4 +24,9 @@
 .cont-apply {
     grid-row: 3 / 4;
     grid-column: 1 / 2;
+}
+
+.cont-shapley {
+    grid-row: 4 / 5;
+    grid-column: 1 / 3;
 }

@@ -110,6 +110,27 @@ class VisualState:
             pdout['pred'] = [self.pred[i] for i in sel_idcs]
             return pdout.to_dict('records')
 
+    def update_shap_fig(self, selected_data=None):
+        self.fig_shap = go.Figure(layout=go.Layout(
+            margin={'t': 0, 'b': 0, 'l': 0, 'r': 0},
+        ))
+        col_names = self.data.get_column_names()
+        for model in self.models:
+            if model.__class__.__name__ == self.current_model:
+                if selected_data is not None:
+                    sel_idcs = []
+                    for point in selected_data['points']:
+                        point_id = int(self.get_point_id(point))
+                        sel_idcs.append(point_id)
+                    # TODO shap_values = model.get_shap(sel_idcs)
+                    shap_values = np.random.random(len(sel_idcs) * len(col_names)).reshape((len(sel_idcs), len(col_names)))
+                    shap_values = np.mean(shap_values, axis=0)
+                else: # nothing selected
+                    shap_values = [0 for _ in col_names]
+                self.fig_shap.add_trace(go.Bar(x=col_names, y=shap_values))
+        self.fig_shap.update_xaxes(type='category')
+        return self.fig_shap
+
 
 class Visualization(dash.Dash):
 
@@ -126,6 +147,9 @@ class Visualization(dash.Dash):
         self.callback(
             Output('table', 'data'),
             Input('figure', 'selectedData')) (self.state.update_table)
+        self.callback(
+            Output('fig-shapley', 'figure'),
+            Input('figure', 'selectedData')) (self.state.update_shap_fig)
 
 
     def _setup_page(self):
@@ -177,6 +201,15 @@ class Visualization(dash.Dash):
             # Apply button
             html.Div(className='cont-apply', children=[
                 html.Button('Apply changes', id='apply-button', n_clicks=0),
+            ]),
+            html.Div(className='cont-shapley', children=[
+                dcc.Graph(
+                    id='fig-shapley',
+                    responsive=True,
+                    config={'responsive': True},
+                    style={'height': '100%', 'width': '100%'},
+                    figure=self.state.update_shap_fig()
+                ),
             ])
         ])
 
