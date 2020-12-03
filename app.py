@@ -54,7 +54,22 @@ class VisualState:
         return self.create_fig(relayout_data=relayout_data)
 
     def update_data(self, selected_data, table_data):
-        raise NotImplementedError
+        if selected_data is not None:
+            sel_idcs = []
+            for point in selected_data['points']:
+                point_id = int(self.get_point_id(point))
+                sel_idcs.append(point_id)
+        for i,sel in enumerate(sel_idcs):
+            del table_data[i]['pred']
+            continuous_indices = [0, 2, 4, 10, 11, 12]
+            normalized_row = []
+            for i,e in enumerate(table_data[i].values()):
+                if i in continuous_indices: normalized_row.append(int(e))
+                else: normalized_row.append(e)
+            normalized_row = self.data.normalize_single(normalized_row)
+            print('before', self.data.pd_X.iloc[sel])
+            self.data.pd_X.iloc[sel] = normalized_row
+            print('after', self.data.pd_X.iloc[sel])
 
     def create_fig(self, use_prediction=False, relayout_data=None):
         self.fig = make_subplots(rows=1, cols=1)
@@ -107,6 +122,9 @@ class VisualState:
                 point_id = int(self.get_point_id(point))
                 sel_idcs.append(point_id)
             pdout = self.data.pd_X.iloc[sel_idcs]
+            for i in range(len(sel_idcs)):
+                denorm = self.data.denormalize(pdout.iloc[i].to_numpy())
+                pdout.iloc[i] = denorm
             pdout['pred'] = [self.pred[i] for i in sel_idcs]
             return pdout.to_dict('records')
 

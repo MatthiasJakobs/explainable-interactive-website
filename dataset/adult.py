@@ -90,6 +90,15 @@ class Adult(Dataset):
             result[feature_name] = (df[feature_name] - mean) / (std)
         return result
 
+    def normalize_single(self, x):
+        continuous_indices = [0, 2, 4, 10, 11, 12]
+        for i, c_indx in enumerate(continuous_indices):
+            name = continous_columns[i]
+            mean = self.mean_std[name]['mean']
+            std = self.mean_std[name]['std']
+            x[c_indx] = (x[c_indx] - mean) / (std)
+        return x
+
     def denormalize(self, x):
         # only works with numpy and pytorch vectors
         nr_features = x.shape[-1]
@@ -98,19 +107,19 @@ class Adult(Dataset):
         else:
             round_fn = np.round
 
-        if nr_features == 13:
+        if nr_features == 14:
             continuous_indices = [0, 2, 4, 10, 11, 12]
             for i, c_indx in enumerate(continuous_indices):
                 name = continous_columns[i]
                 mean = self.mean_std[name]['mean']
                 std = self.mean_std[name]['std']
-                x[:, c_indx] = round_fn(x[:, i] * std + mean)
-        else:
-            # one-hot vectors
-            for i, name in enumerate(continous_columns):
-                mean = self.mean_std[name]['mean']
-                std = self.mean_std[name]['std']
-                x[:, i] = round_fn(x[:, i] * std + mean)
+                x[c_indx] = round_fn(x[c_indx] * std + mean)
+        # else:
+        #     # one-hot vectors
+        #     for i, name in enumerate(continous_columns):
+        #         mean = self.mean_std[name]['mean']
+        #         std = self.mean_std[name]['std']
+        #         x[:, i] = round_fn(x[:, i] * std + mean)
 
         return x
 
@@ -143,3 +152,6 @@ class Adult(Dataset):
 
     def get_categorical_column_names(self):
         return categorical_columns
+
+    def get_continous_column_names(self):
+        return continous_columns
