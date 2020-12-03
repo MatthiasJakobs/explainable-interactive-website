@@ -23,7 +23,7 @@ def generate_CF(instance):
                                             init_near_query_instance=True, tie_random=False, 
                                             stopping_threshold=0.5, posthoc_sparsity_param=0.1, 
                                             posthoc_sparsity_algorithm="binary")
-    res = dice_exp.visualize_as_dataframe(show_only_changes=False)
+    res = dice_exp.final_cfs_df
     return res
 
 
@@ -32,3 +32,5 @@ ori_dict = {'age': 0.682426, 'workclass': 'Private', 'fnlwgt': 0.852807, 'educat
 instance = pd.DataFrame(ori_dict,index=[0])
 res = generate_CF(instance)
 print(res)
+
+    
