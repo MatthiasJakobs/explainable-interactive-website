@@ -2,25 +2,29 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import numpy as np
+import os.path
 
 from dataset.adult import Adult
 import matplotlib.pyplot as plt
+from dataset.adult import Adult
 
-class BasicNet(nn.Module):
 
-    def predict(self, data):
-        return torch.argmax(self.forward(data.torch()[0]), dim=-1).numpy()
 
-class FcNet(BasicNet):
-    def __init__(self):
+class FcNet(nn.Module):
+    def __init__(self, checkpoint='fc_model.pt'):
         super(FcNet, self).__init__()
-
+        self.build_model() 
+        if os.path.isfile(checkpoint):
+            self.model = torch.load(checkpoint)
+        else:
+            print('Model path does not exist!')
+            
+    def build_model(self):
         self.fc1 = nn.Linear(108, 256)
         self.fc2 = nn.Linear(256, 512)
         self.fc3 = nn.Linear(512, 1024)
         self.fc4 = nn.Linear(1024, 2)
-        # self.softmax = nn.Softmax(dim=-1)
-
+        
     def forward(self, x):
         x = F.relu(self.fc1(x))
         x = F.relu(self.fc2(x))
@@ -28,18 +32,28 @@ class FcNet(BasicNet):
         x = self.fc4(x)
         return x
         # return self.softmax(self.fc2(x))
-
-class ConvNet(BasicNet):
-    def __init__(self):
+        
+    def predict (self, data):
+        return torch.argmax(self.model.forward(data.torch()[0]), dim=-1).numpy()         
+    
+    
+class ConvNet(nn.Module):
+    def __init__(self, checkpoint='conv_model.pt'):
         super(ConvNet, self).__init__()
-
+        self.build_model() 
+        if os.path.isfile(checkpoint):
+            self.model = torch.load(checkpoint)
+        else:
+            raise RuntimeError ('Model path does not exist!')
+            
+    def build_mode(self):
         self.conv1 = nn.Conv1d(108, 128, kernel_size=3)
         self.pool = nn.MaxPool1d(2, 2)
         self.conv2 = nn.Conv1d(128, 256, kernel_size=3)
         self.fc1 = nn.Linear(256 * 3 * 3, 256)
         self.fc2 = nn.Linear(256, 512)
         self.fc3 = nn.Linear(512, 2)
-
+        
     def forward(self, x):
         x = self.pool(F.relu(self.conv1(x)))
         x = self.pool(F.relu(self.conv2(x)))
@@ -48,7 +62,10 @@ class ConvNet(BasicNet):
         x = F.relu(self.fc2(x))
         x = self.fc3(x)
         return x
-        
+    
+    def predict (self, data):
+        return torch.argmax(self.model.forward(data.torch()[0]), dim=-1).numpy() 
+    
 def train():
     learning_rate = 1e-3
     batch_size = 512
@@ -59,7 +76,7 @@ def train():
     dl_train = torch.utils.data.DataLoader(ds_train, batch_size=batch_size, shuffle=False)
     dl_test = torch.utils.data.DataLoader(ds_test, batch_size=batch_size, shuffle=False)
 
-    net = ConvNet()
+    net = FcNet()
     criterion = nn.CrossEntropyLoss()
     # criterion = nn.BCELoss()
     optimizer = torch.optim.Adam(net.parameters(), lr=learning_rate)
@@ -72,10 +89,7 @@ def train():
         for batch_idx, data in enumerate(dl_train):
             optimizer.zero_grad()
             x, y = data['x'], data['y']
-            # net_input = x.unsqueeze(1)
-            # print(net_input.shape)
             output = net(x)
-            # output = net(net_input)
 
             train_loss = criterion(output, y)
             epoch_train_loss += train_loss.item()
@@ -103,6 +117,14 @@ def train():
 
         print("Epoch {} train_loss {} val_accuracy {}".format(e, epoch_train_loss, val_correct / float(len(ds_test))))
     plotter(epochs, logs_train_loss, logs_val_loss)
+    
+    # torch.save(net.state_dict(), "fc_model.pth")
+    model = net.__class__.__name__
+    if model == 'FcNet':
+        path = 'fc_model.pt'
+    elif model == 'ConvNet':
+        path = 'conv_model.pt'
+    torch.save(net, path)
         
     
 def plotter(epochs, logs_train_loss, logs_val_loss):
@@ -121,7 +143,9 @@ def plotter(epochs, logs_train_loss, logs_val_loss):
 
     plt.show()
 
-    # torch.save(net.state_dict(), "model.pth")
-
 if __name__ == "__main__":
-    train()
+    # train()
+    net = FcNet()
+    data = Adult('', False, 500)
+    predictions = net.predict(data)
+    # print(predictions)
