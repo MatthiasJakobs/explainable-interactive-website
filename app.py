@@ -18,16 +18,23 @@ from model import Net
 
 class VisualState:
 
-    def __init__(self, data):
+    def __init__(self, data, models):
         self.data = data
+        self.models = models
+        self.current_model = models[0].__class__.__name__
         self.umap_2d = UMAP(random_state=0)
         self.projections = self.umap_2d.fit_transform(self.data.numpy()[0])
-        self.net = Net()
-        self.pred = np.array(torch.argmax(self.net(self.data.torch()[0]), dim=-1))
-        self.confuse = np.zeros_like(self.pred).astype(str)
-        correct = self.data.numpy()[1] == self.pred
-        self.confuse[correct] = 'CORRECT'
-        self.confuse[np.invert(correct)] = 'WRONG'
+        self.predict()
+
+    def predict(self):
+        for model in self.models:
+            if model.__class__.__name__ == self.current_model:
+                # TODO replace by predict function call
+                self.pred = np.array(torch.argmax(model(self.data.torch()[0]), dim=-1))
+                self.confuse = np.zeros_like(self.pred).astype(str)
+                correct = self.data.numpy()[1] == self.pred
+                self.confuse[correct] = 'CORRECT'
+                self.confuse[np.invert(correct)] = 'WRONG'
 
     def get_point_id(self, interaction_data):
         curve_number = interaction_data['curveNumber']
@@ -100,10 +107,11 @@ class VisualState:
 
 class Visualization(dash.Dash):
 
-    def __init__(self, data):
+    def __init__(self, data, models):
         super().__init__(__name__)#, external_stylesheets=external_stylesheets)
         self.data = data
-        self.state = VisualState(data)
+        self.state = VisualState(data, models)
+        self.model_names = [model.__class__.__name__ for model in models]
         self._setup_page()
         # self.callback(
         #     Output('data-info', "children"),
@@ -130,6 +138,11 @@ class Visualization(dash.Dash):
                     {'label': 'Show Predictions', 'value': 'PRED'},
                 ],
                 value=[]
+            ),
+            dcc.Dropdown(
+                id='model-select',
+                options=[{'label': mname, 'value': mname.upper()} for mname in self.model_names],
+                value=self.model_names[0].upper()
             ),
             # Table
             html.Div([
@@ -166,5 +179,6 @@ class Visualization(dash.Dash):
 
 if __name__ == "__main__":
     data = Adult('', False, 500)
-    app = Visualization(data)
+    models = [Net()]
+    app = Visualization(data, models)
     app.run_server(debug=False)
