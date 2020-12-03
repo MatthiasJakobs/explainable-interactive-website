@@ -67,9 +67,10 @@ class VisualState:
                 if i in continuous_indices: normalized_row.append(int(e))
                 else: normalized_row.append(e)
             normalized_row = self.data.normalize_single(normalized_row)
-            print('before', self.data.pd_X.iloc[sel])
+            # print('before', self.projections[sel], self.data.pd_X.iloc[sel])
             self.data.pd_X.iloc[sel] = normalized_row
-            print('after', self.data.pd_X.iloc[sel])
+            self.projections[sel] = self.umap_2d.transform(self.data.numpy()[0][sel].reshape(1, -1))
+            # print('after', self.projections[sel], self.data.pd_X.iloc[sel])
 
     def create_fig(self, use_prediction=False, relayout_data=None):
         self.fig = make_subplots(rows=1, cols=1)
