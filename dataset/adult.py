@@ -34,6 +34,7 @@ class Adult(Dataset):
         else:
             self.subset_size = len(adult_complete)
 
+        np.random.seed(200)
         perm = np.random.permutation(len(adult_complete))[:self.subset_size]
 
         if self.train:
