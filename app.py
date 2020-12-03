@@ -115,7 +115,7 @@ class VisualState:
             return json.dumps(rep, indent=4)
         return json.dumps(None)
 
-    def update_table(self, selected_data):
+    def update_table(self, selected_data, resetbutton_nclick):
         if selected_data is not None:
             sel_idcs = []
             for point in selected_data['points']:
@@ -164,7 +164,7 @@ class Visualization(dash.Dash):
             [State('figure', 'relayoutData'), State('figure', 'selectedData'), State('table', 'data')]) (self.state.update_figure)
         self.callback(
             Output('table', 'data'),
-            Input('figure', 'selectedData')) (self.state.update_table)
+            [Input('figure', 'selectedData'), Input('reset-button', 'n_clicks')]) (self.state.update_table)
         self.callback(
             Output('fig-shapley', 'figure'),
             Input('figure', 'selectedData')) (self.state.update_shap_fig)
@@ -218,6 +218,7 @@ class Visualization(dash.Dash):
             ]),
             # Apply button
             html.Div(className='cont-apply', children=[
+                html.Button('Reset', id='reset-button', n_clicks=0),
                 html.Button('Apply changes', id='apply-button', n_clicks=0),
             ]),
             html.Div(className='cont-shapley', children=[
