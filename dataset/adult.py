@@ -106,7 +106,6 @@ class Adult(Dataset):
                 std = self.mean_std[name]['std']
                 x[:, c_indx] = round_fn(x[:, i] * std + mean)
         else:
-            print('is one hot')
             # one-hot vectors
             for i, name in enumerate(continous_columns):
                 mean = self.mean_std[name]['mean']
