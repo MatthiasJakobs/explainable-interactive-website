@@ -34,8 +34,9 @@ class FcNet(nn.Module):
         # return self.softmax(self.fc2(x))
         
     def predict (self, data):
-        return torch.argmax(self.model.forward(data.torch()[0]), dim=-1).numpy()         
+        return torch.argmax(self.model.forward(data.torch()[0]), dim=-1).numpy() 
     
+        
     
 class ConvNet(nn.Module):
     def __init__(self, checkpoint='conv_model.pt'):
@@ -44,9 +45,9 @@ class ConvNet(nn.Module):
         if os.path.isfile(checkpoint):
             self.model = torch.load(checkpoint)
         else:
-            raise RuntimeError ('Model path does not exist!')
+            print('Model path does not exist!')
             
-    def build_mode(self):
+    def build_model(self):
         self.conv1 = nn.Conv1d(108, 128, kernel_size=3)
         self.pool = nn.MaxPool1d(2, 2)
         self.conv2 = nn.Conv1d(128, 256, kernel_size=3)
@@ -66,17 +67,23 @@ class ConvNet(nn.Module):
     def predict (self, data):
         return torch.argmax(self.model.forward(data.torch()[0]), dim=-1).numpy() 
     
-def train():
+def train(model_name):
     learning_rate = 1e-3
     batch_size = 512
-    epochs = 150
+    epochs = 20
 
     ds_train = Adult('dataset', train=True)
     ds_test = Adult('dataset', train=False)
     dl_train = torch.utils.data.DataLoader(ds_train, batch_size=batch_size, shuffle=False)
     dl_test = torch.utils.data.DataLoader(ds_test, batch_size=batch_size, shuffle=False)
 
-    net = FcNet()
+    if model_name == 'FcNet':
+        path = 'fc_model.pt'
+        net = FcNet()
+    elif model_name == 'ConvNet':
+        path = 'conv_model.pt'
+        net = ConvNet()
+       
     criterion = nn.CrossEntropyLoss()
     # criterion = nn.BCELoss()
     optimizer = torch.optim.Adam(net.parameters(), lr=learning_rate)
@@ -119,11 +126,6 @@ def train():
     plotter(epochs, logs_train_loss, logs_val_loss)
     
     # torch.save(net.state_dict(), "fc_model.pth")
-    model = net.__class__.__name__
-    if model == 'FcNet':
-        path = 'fc_model.pt'
-    elif model == 'ConvNet':
-        path = 'conv_model.pt'
     torch.save(net, path)
         
     
@@ -144,8 +146,7 @@ def plotter(epochs, logs_train_loss, logs_val_loss):
     plt.show()
 
 if __name__ == "__main__":
-    # train()
+    # train('FcNet')
     net = FcNet()
     data = Adult('', False, 500)
     predictions = net.predict(data)
-    # print(predictions)
