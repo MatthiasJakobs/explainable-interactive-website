@@ -30,8 +30,6 @@ class VisualState:
     def predict(self):
         for model in self.models:
             if model.__class__.__name__ == self.current_model:
-                # TODO replace by predict function call
-                # self.pred = np.array(torch.argmax(model(self.data.torch()[0]), dim=-1))
                 self.pred = model.predict(self.data)
                 self.confuse = np.zeros_like(self.pred).astype(str)
                 correct = self.data.numpy()[1] == self.pred

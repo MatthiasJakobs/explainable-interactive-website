@@ -6,8 +6,12 @@ import numpy as np
 from dataset.adult import Adult
 import matplotlib.pyplot as plt
 
+class BasicNet(nn.Module):
 
-class FcNet(nn.Module):
+    def predict(self, data):
+        return torch.argmax(self.forward(data.torch()[0]), dim=-1).numpy()
+
+class FcNet(BasicNet):
     def __init__(self):
         super(FcNet, self).__init__()
 
@@ -20,16 +24,12 @@ class FcNet(nn.Module):
     def forward(self, x):
         x = F.relu(self.fc1(x))
         x = F.relu(self.fc2(x))
-        # x = F.relu(self.fc3(x))
-        x = self.fc3(x)
+        x = F.relu(self.fc3(x))
+        x = self.fc4(x)
         return x
         # return self.softmax(self.fc2(x))
-        
-    def predict(data):
-        return np.array(torch.argmax(FcNet(data.torch()[0]), dim=-1))
 
-
-class ConvNet(nn.Module):
+class ConvNet(BasicNet):
     def __init__(self):
         super(ConvNet, self).__init__()
 
@@ -48,9 +48,6 @@ class ConvNet(nn.Module):
         x = F.relu(self.fc2(x))
         x = self.fc3(x)
         return x
-    
-    def predict(data):
-        return np.array(torch.argmax(ConvNet(data.torch()[0]), dim=-1))
         
 def train():
     learning_rate = 1e-3
