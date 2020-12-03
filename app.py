@@ -34,10 +34,16 @@ class VisualState:
         label = float(self.fig['data'][curve_number]['name'])
         return np.where(self.data.numpy()[1] == label)[0][interaction_data['pointNumber']]
 
-    def update_figure(self, value, relayout_data):
-        if 'PRED' in value:
+    def update_figure(self, input_data, input2, relayout_data, selected_data, table_data):
+        changed_id = dash.callback_context.triggered[0]['prop_id']
+        if changed_id == 'apply-button.n_clicks':
+            self.update_data(selected_data, table_data)
+        if 'PRED' in input_data:
             return self.create_fig(use_prediction=True, relayout_data=relayout_data)
         return self.create_fig(relayout_data=relayout_data)
+
+    def update_data(self, selected_data, table_data):
+        raise NotImplementedError
 
     def create_fig(self, use_prediction=False, relayout_data=None):
         self.fig = make_subplots(rows=1, cols=1)
@@ -104,11 +110,12 @@ class Visualization(dash.Dash):
         #     [Input("figure", "selectedData")]) (self.state.update_selected_data)
         self.callback(
             Output('figure', 'figure'),
-            Input('switch_displayed_data', 'value'),
-            State('figure', 'relayoutData')) (self.state.update_figure)
+            [Input('switch_displayed_data', 'value'), Input('apply-button', 'n_clicks')],
+            [State('figure', 'relayoutData'), State('figure', 'selectedData'), State('table', 'data')]) (self.state.update_figure)
         self.callback(
             Output('table', 'data'),
             Input('figure', 'selectedData')) (self.state.update_table)
+
 
     def _setup_page(self):
         self.layout = html.Div([
