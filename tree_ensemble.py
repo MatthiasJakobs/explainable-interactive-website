@@ -28,19 +28,20 @@ class RandomForest(CatBoostClassifier):
             super().save_model('tree.model')
             self.fitted = True
 
-    def predict(self, ds, print_accuracy=False):
+    def predict(self, ds, sel_idcs=None, print_accuracy=False):
         X, y = ds.pandas()
+        if sel_idcs is not None:
+            X = X.iloc[sel_idcs]
+            y = y.iloc[sel_idcs]
         predictions = super().predict(X)
         if print_accuracy:
             print(accuracy_score(predictions, y))
-
         return predictions
 
-    def get_shap(self, data_rows, ds):
-        X, y = ds.pandas()
+    def get_shap(self, data_rows, y, ds):
+        X, _estimator_type = ds.pandas()
         X = X.iloc[data_rows]
-        print(X.columns)
-        y = y.iloc[data_rows]
+        y = y[data_rows]
         categorical_features_indices = self.categorical_feature_indices(X)
         shap_values = self.get_feature_importance(Pool(X, label=y, cat_features=categorical_features_indices), type="ShapValues")
         return shap_values[:, :-1]
