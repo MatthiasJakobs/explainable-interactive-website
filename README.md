@@ -6,6 +6,7 @@ I think you just sum up all explanations for the one-hot vector components
 - Get Python 3.8 (e.g. with Anaconda)
 - install PyTorch (only CPU): https://pytorch.org/
 - Install custom additional packages: `pip install shap==0.36.0 dash plotly umap-learn matplotlib dice-ml catboost`
+- `python app.py`
 
 ## TODO:
 - data exploration (classification scatter plot, tabular insight into data values)
