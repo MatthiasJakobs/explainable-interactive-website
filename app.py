@@ -218,8 +218,6 @@ class Visualization(dash.Dash):
                     value=self.model_names[0]
                 ),      
             ]),
-            html.Br(),
-            html.P("Selected data:"),
             # Table
             html.Div(className='cont-table', children=[
                 dash_table.DataTable(
