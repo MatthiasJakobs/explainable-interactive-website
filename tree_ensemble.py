@@ -16,7 +16,12 @@ class RandomForest(CatBoostClassifier):
             else:
                 print("Path {} does not contain a valid checkpoint. Will initialize the model randomly".format(use_checkpoint))
                 self.fitted = False
-            
+    
+    def get_counterfactual(self, data_rows, y, ds):
+        pdout = ds.pd_X.iloc[data_rows]
+        pdout['income'] = y[data_rows]
+        pdout['index'] = y[data_rows]
+        return pdout
 
     def categorical_feature_indices(self, x):
         return np.where(x.dtypes != np.float)[0]

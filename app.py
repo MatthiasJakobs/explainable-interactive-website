@@ -18,6 +18,9 @@ from dataset.adult import Adult, column_names
 from model import FcNet, ConvNet
 from tree_ensemble import RandomForest
 
+def get_point_hash(point):
+    return hash((point['curveNumber'], point['pointNumber']))
+
 class VisualState:
 
     def __init__(self, data, models):
@@ -44,30 +47,28 @@ class VisualState:
                 self.confuse[correct] = 'CORRECT'
                 self.confuse[np.invert(correct)] = 'WRONG'
 
-    def get_point_id(self, interaction_data):
-        curve_number = interaction_data['curveNumber']
-        label = np.array([self.fig['data'][curve_number]['name']], dtype=self.y.dtype)
-        p_id = np.where(self.y == label)[0][interaction_data['pointNumber']]
-        return p_id
+    def get_point_id(self, point):
+        try:
+            point_id = self.remap_idc[get_point_hash(point)]
+        except KeyError:
+            curve_number = point['curveNumber']
+            label = np.array([self.fig['data'][curve_number]['name']], dtype=self.y.dtype)
+            point_id = int(np.where(self.y == label)[0][point['pointNumber']])
+        return point_id
 
     def get_points_ids(self, selected_data):
         # TODO add a check, that when any of the edited points (listed in remap_idc)
         #      is deselected, its entry is also removed from remap_idc (it won't be selectable again!)
-        sel_idcs = []
-        for point in selected_data['points']:
-            try:
-                point_id = self.remap_idc[(point['curveNumber'], point['pointNumber'])]
-            except KeyError:
-                point_id = int(self.get_point_id(point))
-            sel_idcs.append(point_id)
-        return sel_idcs
+        if selected_data is None:
+            return []
+        return [self.get_point_id(point) for point in selected_data['points']]
 
     def update_figure(self, selected_data, display_radio, n_clicks, chosen_model, relayout_data, table_data):
         changed_id = dash.callback_context.triggered[0]['prop_id']
         if changed_id == 'figure.selectedData':
             self.selection = self.get_points_ids(selected_data)
         if changed_id == 'apply-button.n_clicks':
-            self.update_data(table_data)
+            self.apply_data_changes(table_data)
             # store remapping for updated points
             self.remap_idc = {}
             for idx, point in enumerate(selected_data['points']):
@@ -82,10 +83,11 @@ class VisualState:
         if changed_id != 'figure.selectedData':
             self.create_fig(relayout_data=relayout_data)
         # set selection in figure
-        for label in np.unique(self.y):
-            label_idc = np.where(self.y == label)[0]
-            select = np.array([np.where(label_idc == point)[0] for point in self.selection if np.any(label_idc == point)]).flatten()
-            self.fig.update_traces(selectedpoints=select, selector=dict(name=str(label)))
+        if len(self.selection) > 0:
+            for label in np.unique(self.y):
+                label_idc = np.where(self.y == label)[0]
+                select = np.array([np.where(label_idc == point)[0] for point in self.selection if np.any(label_idc == point)]).flatten()
+                self.fig.update_traces(selectedpoints=select, selector=dict(name=str(label)))
         return self.fig, self.selection
 
     def update_counterfactuals(self, n_clicks):
@@ -94,16 +96,16 @@ class VisualState:
                 if model.__class__.__name__ == self.current_model:
                     cfs = model.get_counterfactual(self.selection, self.pred, self.data)
                     prediction = pd.DataFrame(data=cfs['income'])
-                    prediction.columns = ['pred']
+                    prediction.columns = ['income']
                     cfs = cfs.drop(['income', 'index'], axis=1)
                     cfs = self.data.denormalize(cfs)
                     return pd.concat((cfs, prediction), axis=1).to_dict('records')
 
-    def update_data(self, table_data):
+    def apply_data_changes(self, table_data):
         if len(self.selection) != 0:
             for i, sel in enumerate(self.selection):
-                del table_data[i]['pred']
-                continuous_indices = [0, 2, 4, 10, 11, 12]
+                del table_data[i]['income']
+                continuous_indices = [0, 2, 4, 10, 11, 12] # TODO remove hardcoded?
                 normalized_row = []
                 for i,e in enumerate(table_data[i].values()):
                     if i in continuous_indices: normalized_row.append(int(e))
@@ -149,7 +151,7 @@ class VisualState:
             for i in range(len(self.selection)):
                 denorm = self.data.denormalize(pdout.iloc[i].to_numpy())
                 pdout.iloc[i] = denorm
-            pdout['pred'] = [self.pred[i] for i in self.selection]
+            pdout['income'] = [self.pred[i] for i in self.selection]
             return pdout.to_dict('records')
 
     def update_shap_fig(self, tmp=None):
@@ -223,16 +225,16 @@ class Visualization(dash.Dash):
                 dash_table.DataTable(
                     id='table',
                     data=None,
-                    columns = [{"name": col, "id": col, 'presentation': 'dropdown'} if (col in self.data.get_categorical_column_names()) else {"name": col, "id": col} for col in self.data.get_column_names()] + [{"name": 'pred', "id": 'pred'}],
+                    columns = [{"name": col, "id": col, 'presentation': 'dropdown'} if (col in self.data.get_categorical_column_names()) else {"name": col, "id": col} for col in self.data.get_column_names()] + [{"name": 'income', "id": 'income'}],
                     editable=True,
                     dropdown = {category:{'options': [{'label': i, 'value': i} for i in choices]} for category,choices in self.data.get_categorical_choices().items()},
                     style_data_conditional=[
                         {
-                            'if': {'filter_query': '{pred} = 0', 'column_id': 'pred'},
+                            'if': {'filter_query': '{pred} = 0', 'column_id': 'income'},
                             'backgroundColor': 'blue', 'color': 'white'
                         },
                         {
-                            'if': {'filter_query': '{pred} = 1', 'column_id': 'pred'},
+                            'if': {'filter_query': '{pred} = 1', 'column_id': 'income'},
                             'backgroundColor': 'red', 'color': 'white'
                         },
                     ]
@@ -241,16 +243,16 @@ class Visualization(dash.Dash):
                 dash_table.DataTable(
                     id='counterfactual-table',
                     data=None,
-                    columns = [{"name": col, "id": col, 'presentation': 'dropdown'} if (col in self.data.get_categorical_column_names()) else {"name": col, "id": col} for col in self.data.get_column_names()] + [{"name": 'pred', "id": 'pred'}],
+                    columns = [{"name": col, "id": col, 'presentation': 'dropdown'} if (col in self.data.get_categorical_column_names()) else {"name": col, "id": col} for col in self.data.get_column_names()] + [{"name": 'income', "id": 'income'}],
                     editable=False,
                     dropdown = {category:{'options': [{'label': i, 'value': i} for i in choices]} for category,choices in self.data.get_categorical_choices().items()},
                     style_data_conditional=[
                         {
-                            'if': {'filter_query': '{pred} = 0', 'column_id': 'pred'},
+                            'if': {'filter_query': '{pred} = 0', 'column_id': 'income'},
                             'backgroundColor': 'blue', 'color': 'white'
                         },
                         {
-                            'if': {'filter_query': '{pred} = 1', 'column_id': 'pred'},
+                            'if': {'filter_query': '{pred} = 1', 'column_id': 'income'},
                             'backgroundColor': 'red', 'color': 'white'
                         },
                     ]

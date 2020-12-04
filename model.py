@@ -13,8 +13,11 @@ from dataset.adult import Adult
 
 class BaseModel(nn.Module):
 
-    def predict (self, data):
-        return torch.argmax(self.model.forward(data.torch()[0]), dim=-1).numpy() 
+    def predict (self, data, sel_idcs=None):
+        data = data.torch()[0]
+        if sel_idcs is not None:
+            data = data[sel_idcs]
+        return torch.argmax(self.model.forward(data), dim=-1).numpy() 
 
     def get_shap(self, data_rows, y, ds):
         shap_values = np.random.random((len(data_rows) , len(ds.get_column_names())))
