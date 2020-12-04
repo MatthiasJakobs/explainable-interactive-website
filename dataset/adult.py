@@ -16,38 +16,39 @@ class Adult(Dataset):
 
     def __init__(self, path, train=True, subset_size=None, transform=None):
         # TODO: Remove lines with missing values
-        ds_train = pd.read_csv('dataset/adult.data', sep=",\s", header=None, names = column_names, engine = 'python')
-        ds_test = pd.read_csv('dataset/adult.test', sep=",\s", header=None, names = column_names, engine = 'python')
+        ds_train = pd.read_csv('dataset/adult.data', sep=",\s", header=None, names = column_names, engine = 'python', na_values="?")
+        ds_test = pd.read_csv('dataset/adult.test', sep=",\s", header=None, names = column_names, engine = 'python', na_values="?")
+
+        ds_train = ds_train[ds_train['native-country'] != 'Holand-Netherlands']
         ds_test['income'].replace(regex=True,inplace=True,to_replace=r'\.',value=r'')
-
-        adult_complete = pd.concat([ds_test,ds_train])
-        adult_complete['income'] = adult_complete['income'].astype('category').cat.codes
-        adult_complete = self.normalize(adult_complete)
-
-        adult_onehot = self.to_one_hot(adult_complete, categorical_columns)
-        #adult_onehot = self.normalize(adult_onehot)
 
         self.train = train
 
-        if subset_size is not None:
-            self.subset_size = subset_size
-        else:
-            self.subset_size = len(adult_complete)
-
-        np.random.seed(200)
-        perm = np.random.permutation(len(adult_complete))[:self.subset_size]
-
         if self.train:
-            complete_set = adult_complete.iloc[perm][len(ds_test):]
-            onehot_set = adult_onehot.iloc[perm][len(ds_test):]
+            adult_complete = ds_train
         else:
-            complete_set = adult_complete.iloc[perm][:len(ds_test)]
-            onehot_set = adult_onehot.iloc[perm][:len(ds_test)]
+            adult_complete = ds_test
+
+        adult_complete = adult_complete.dropna()
+        adult_complete['income'] = adult_complete['income'].astype('category').cat.codes
+        adult_complete = self.normalize(adult_complete)
+
+        balanced_df = self.get_minimum_df(adult_complete)
+        min_length = len(balanced_df)
+
+        if subset_size is not None:
+            if subset_size < min_length:
+                raise Exception("Minimum length for adult {} set: {}".format("train" if self.train else "test", min_length))
+            remain = subset_size - min_length
+        else:
+            remain = len(adult_complete) - min_length
+
+        complete_set = pd.concat((balanced_df, adult_complete.drop(balanced_df.index.values).sample(remain)))
 
         self.pd_X = complete_set.drop(columns=['income'], axis=1)
         self.pd_y = complete_set['income']
 
-        self.pd_X_onehot = onehot_set.drop(columns=['income'], axis=1)
+        self.pd_X_onehot = self.to_one_hot(complete_set.drop(columns=['income'], axis=1), categorical_columns)
         self.pd_y_onehot = complete_set['income']
         self.np_X_onehot = self.pd_X_onehot.to_numpy()
         self.np_y_onehot = self.pd_y_onehot.to_numpy()        
@@ -55,9 +56,20 @@ class Adult(Dataset):
         self.pt_y_onehot = torch.tensor(self.pd_y_onehot.to_numpy()).long()
 
         del adult_complete
-        del adult_onehot
         del ds_train
         del ds_test
+
+    def get_minimum_df(self, df):
+        to_return = []
+        test = len(continous_columns)
+        for cat in categorical_columns:
+            realisations = np.unique(df[cat])
+            test += len(realisations)
+            for r in realisations:
+                to_return.append(df[df[cat] == r].sample(1))
+
+        return pd.concat(to_return)
+
 
     def numpy(self):
         return self.np_X_onehot, self.np_y_onehot
@@ -70,14 +82,6 @@ class Adult(Dataset):
             return self.pd_X_onehot, self.pd_y_onehot
         else:
             return self.pd_X, self.pd_y
-
-        # create data that can be directly used with Pytorch
-        self.X_pth = torch.zeros(len(self), *self[0]['x'].shape)
-        self.y_pth = torch.zeros(len(self), *self[0]['y'].shape)
-
-        for i in range(len(self)):
-            self.X_pth[i] = self[i]['x']
-            self.y_pth[i] = self[i]['y']
 
     def normalize(self, df):
         result = df.copy()
@@ -114,20 +118,15 @@ class Adult(Dataset):
                 name = continous_columns[i]
                 mean = self.mean_std[name]['mean']
                 std = self.mean_std[name]['std']
-                x[c_indx] = round_fn(x[c_indx] * std + mean)
-        # else:
-        #     # one-hot vectors
-        #     for i, name in enumerate(continous_columns):
-        #         mean = self.mean_std[name]['mean']
-        #         std = self.mean_std[name]['std']
-        #         x[:, i] = round_fn(x[:, i] * std + mean)
+                if isinstance(x, type(pd.DataFrame(data=[1]))):
+                    x[name] = round_fn(x[name] * std + mean)
+                else:
+                    x[c_indx] = round_fn(x[c_indx] * std + mean)
 
         return x
 
     def to_one_hot(self, df, df_cols):
-        df_1 = df.drop(columns=df_cols, axis=1)
-        df_2 = pd.get_dummies(df[df_cols])
-        return pd.concat([df_1, df_2], axis=1, join='inner')
+        return pd.get_dummies(df, drop_first=False, columns=df_cols)
 
     def get_original_features(self):
         # remove label

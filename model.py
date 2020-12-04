@@ -16,12 +16,16 @@ class BaseModel(nn.Module):
     def predict (self, data):
         return torch.argmax(self.model.forward(data.torch()[0]), dim=-1).numpy() 
 
+    def get_shap(self, data_rows, y, ds):
+        shap_values = np.random.random((len(data_rows) , len(ds.get_column_names())))
+        return shap_values
+
     def get_counterfactual(self, data_rows, y, ds):
         # TODO: What about y?
         #        - I think the model is called on X again, so no need to pass prediction in again?
         X, y = ds.pandas()
         df = pd.concat((X, y), axis=1)
-        d = dice_ml.Data(dataframe=df, continuous_features=continous_columns, outcome_name='income')
+        d = dice_ml.Data(dataframe=X, continuous_features=continous_columns, outcome_name='income')
         backend = 'PYT'
         m = dice_ml.Model(model=self, backend=backend)
         exp = dice_ml.Dice(d, m)
@@ -34,7 +38,7 @@ class BaseModel(nn.Module):
                                                     algorithm="DiverseCF", features_to_vary="all", yloss_type="hinge_loss", 
                                                     diversity_loss_type="dpp_style:inverse_dist", 
                                                     feature_weights="inverse_mad", optimizer="pytorch:adam", 
-                                                    learning_rate=0.05, min_iter=500, max_iter=1000, project_iter=0, 
+                                                    learning_rate=0.05, min_iter=500, max_iter=5000, project_iter=0, 
                                                     loss_diff_thres=1e-5, loss_converge_maxiter=1, verbose=False, 
                                                     init_near_query_instance=True, tie_random=False, 
                                                     stopping_threshold=0.5, posthoc_sparsity_param=0.1, 
@@ -53,16 +57,20 @@ class FcNet(BaseModel):
             print('Model path does not exist!')
             
     def build_model(self):
-        self.fc1 = nn.Linear(108, 256)
+        self.fc1 = nn.Linear(103, 256)
+        self.dropout1 = nn.Dropout(0.5)
         self.fc2 = nn.Linear(256, 512)
-        self.fc3 = nn.Linear(512, 1024)
-        self.fc4 = nn.Linear(1024, 2)
+        self.dropout2 = nn.Dropout(0.5)
+        #self.fc3 = nn.Linear(512, 1024)
+        self.fc3 = nn.Linear(512, 2)
         
     def forward(self, x):
         x = F.relu(self.fc1(x))
+        x = self.dropout1(x)
         x = F.relu(self.fc2(x))
-        x = F.relu(self.fc3(x))
-        x = self.fc4(x)
+        x = self.dropout2(x)
+        x = self.fc3(x)
+        #x = self.fc4(x)
         return x
         # return self.softmax(self.fc2(x))
         
@@ -77,7 +85,7 @@ class ConvNet(BaseModel):
             print('Model path does not exist!')
             
     def build_model(self):
-        self.conv1 = nn.Conv1d(108, 128, kernel_size=3)
+        self.conv1 = nn.Conv1d(103, 128, kernel_size=3)
         self.pool = nn.MaxPool1d(2, 2)
         self.conv2 = nn.Conv1d(128, 256, kernel_size=3)
         self.fc1 = nn.Linear(256 * 3 * 3, 256)

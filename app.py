@@ -3,6 +3,7 @@ import json
 from umap import UMAP
 import numpy as np
 import torch
+import pandas as pd
 
 import dash
 import dash_core_components as dcc
@@ -13,7 +14,7 @@ import plotly.express as px
 from plotly.subplots import make_subplots
 import plotly.graph_objects as go
 
-from dataset.adult import Adult
+from dataset.adult import Adult, column_names
 from model import FcNet, ConvNet
 from tree_ensemble import RandomForest
 
@@ -87,6 +88,17 @@ class VisualState:
             self.fig.update_traces(selectedpoints=select, selector=dict(name=str(label)))
         return self.fig, self.selection
 
+    def update_counterfactuals(self, n_clicks):
+        if len(self.selection) != 0:
+            for model in self.models:
+                if model.__class__.__name__ == self.current_model:
+                    cfs = model.get_counterfactual(self.selection, self.pred, self.data)
+                    prediction = pd.DataFrame(data=cfs['income'])
+                    prediction.columns = ['pred']
+                    cfs = cfs.drop(['income', 'index'], axis=1)
+                    cfs = self.data.denormalize(cfs)
+                    return pd.concat((cfs, prediction), axis=1).to_dict('records')
+
     def update_data(self, table_data):
         if len(self.selection) != 0:
             for i, sel in enumerate(self.selection):
@@ -147,7 +159,6 @@ class VisualState:
             if model.__class__.__name__ == self.current_model:
                 if len(self.selection) != 0:
                     shap_values = model.get_shap(self.selection, self.pred, self.data)
-                    # shap_values = np.random.random(len(self.selection) * len(col_names)).reshape((len(self.selection), len(col_names)))
                     shap_mean = np.mean(shap_values, axis=0)
                     shap_error = np.std(shap_values, axis=0)
                 else: # nothing selected
@@ -177,6 +188,9 @@ class Visualization(dash.Dash):
         self.callback(
             Output('fig-shapley', 'figure'),
             [Input('tmp', 'children')]) (self.state.update_shap_fig)
+        self.callback(
+            Output('counterfactual-table', 'data'),
+            [Input('generate-counterfactuals', 'n_clicks')]) (self.state.update_counterfactuals)
 
 
     def _setup_page(self):
@@ -204,6 +218,8 @@ class Visualization(dash.Dash):
                     value=self.model_names[0]
                 ),      
             ]),
+            html.Br(),
+            html.P("Selected data:"),
             # Table
             html.Div(className='cont-table', children=[
                 dash_table.DataTable(
@@ -223,12 +239,31 @@ class Visualization(dash.Dash):
                         },
                     ]
                 ),
+                html.P("Counterfactuals:"),
+                dash_table.DataTable(
+                    id='counterfactual-table',
+                    data=None,
+                    columns = [{"name": col, "id": col, 'presentation': 'dropdown'} if (col in self.data.get_categorical_column_names()) else {"name": col, "id": col} for col in self.data.get_column_names()] + [{"name": 'pred', "id": 'pred'}],
+                    editable=False,
+                    dropdown = {category:{'options': [{'label': i, 'value': i} for i in choices]} for category,choices in self.data.get_categorical_choices().items()},
+                    style_data_conditional=[
+                        {
+                            'if': {'filter_query': '{pred} = 0', 'column_id': 'pred'},
+                            'backgroundColor': 'blue', 'color': 'white'
+                        },
+                        {
+                            'if': {'filter_query': '{pred} = 1', 'column_id': 'pred'},
+                            'backgroundColor': 'red', 'color': 'white'
+                        },
+                    ]
+                ),
                 html.Div(id='table-dropdown-container')
             ]),
             # Apply button
             html.Div(className='cont-apply', children=[
                 html.Button('Reset', id='reset-button', n_clicks=0),
                 html.Button('Apply changes', id='apply-button', n_clicks=0),
+                html.Button('Generate Counterfactuals', id='generate-counterfactuals', n_clicks=0),
             ]),
             html.Div(className='cont-shapley', children=[
                 dcc.Graph(
@@ -244,6 +279,6 @@ class Visualization(dash.Dash):
 
 if __name__ == "__main__":
     data = Adult('', False, 500)
-    models = [RandomForest()]
+    models = [RandomForest(), FcNet()]
     app = Visualization(data, models)
     app.run_server(debug=False)
