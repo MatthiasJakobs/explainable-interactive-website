@@ -3,14 +3,47 @@ import torch.nn as nn
 import torch.nn.functional as F
 import numpy as np
 import os.path
+import dice_ml
+import pandas as pd
 
-from dataset.adult import Adult
+from dataset.adult import Adult, continous_columns
 import matplotlib.pyplot as plt
 from dataset.adult import Adult
 
 
+class BaseModel(nn.Module):
 
-class FcNet(nn.Module):
+    def predict (self, data):
+        return torch.argmax(self.model.forward(data.torch()[0]), dim=-1).numpy() 
+
+    def get_counterfactual(self, data_rows, y, ds):
+        # TODO: What about y?
+        #        - I think the model is called on X again, so no need to pass prediction in again?
+        X, y = ds.pandas()
+        df = pd.concat((X, y), axis=1)
+        d = dice_ml.Data(dataframe=df, continuous_features=continous_columns, outcome_name='income')
+        backend = 'PYT'
+        m = dice_ml.Model(model=self, backend=backend)
+        exp = dice_ml.Dice(d, m)
+
+        instances = pd.DataFrame.to_dict(X.iloc[data_rows], orient='record')
+        res = []
+        for i in range(len(instances)):
+            dice_exp = exp.generate_counterfactuals(instances[i], total_CFs=1, desired_class="opposite",
+                                                    proximity_weight=0.5, diversity_weight=1, categorical_penalty=0.1, 
+                                                    algorithm="DiverseCF", features_to_vary="all", yloss_type="hinge_loss", 
+                                                    diversity_loss_type="dpp_style:inverse_dist", 
+                                                    feature_weights="inverse_mad", optimizer="pytorch:adam", 
+                                                    learning_rate=0.05, min_iter=500, max_iter=1000, project_iter=0, 
+                                                    loss_diff_thres=1e-5, loss_converge_maxiter=1, verbose=False, 
+                                                    init_near_query_instance=True, tie_random=False, 
+                                                    stopping_threshold=0.5, posthoc_sparsity_param=0.1, 
+                                                    posthoc_sparsity_algorithm="binary")
+            res.append(dice_exp.final_cfs_df)
+        return pd.concat(res).reset_index()
+    
+
+class FcNet(BaseModel):
     def __init__(self, checkpoint='fc_model.pt'):
         super(FcNet, self).__init__()
         self.build_model() 
@@ -33,12 +66,8 @@ class FcNet(nn.Module):
         return x
         # return self.softmax(self.fc2(x))
         
-    def predict (self, data):
-        return torch.argmax(self.model.forward(data.torch()[0]), dim=-1).numpy() 
     
-        
-    
-class ConvNet(nn.Module):
+class ConvNet(BaseModel):
     def __init__(self, checkpoint='conv_model.pt'):
         super(ConvNet, self).__init__()
         self.build_model() 
@@ -64,8 +93,6 @@ class ConvNet(nn.Module):
         x = self.fc3(x)
         return x
     
-    def predict (self, data):
-        return torch.argmax(self.model.forward(data.torch()[0]), dim=-1).numpy() 
     
 def train(model_name):
     learning_rate = 1e-3
