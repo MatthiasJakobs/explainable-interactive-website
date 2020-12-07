@@ -88,9 +88,11 @@ class VisualState:
                 label_idc = np.where(self.y == label)[0]
                 select = np.array([np.where(label_idc == point)[0] for point in self.selection if np.any(label_idc == point)]).flatten()
                 self.fig.update_traces(selectedpoints=select, selector=dict(name=str(label)))
-        return self.fig, self.selection
+        return self.fig
 
-    def update_counterfactuals(self, n_clicks):
+    def update_counterfactuals(self, n_clicks, tmp):
+        if dash.callback_context.triggered[0]['prop_id'] != 'generate-counterfactuals.n_clicks':
+            return None
         if len(self.selection) != 0:
             for model in self.models:
                 if model.__class__.__name__ == self.current_model:
@@ -100,6 +102,10 @@ class VisualState:
                     cfs = cfs.drop(['income', 'index'], axis=1)
                     cfs = self.data.denormalize(cfs)
                     return pd.concat((cfs, prediction), axis=1).to_dict('records')
+
+    def update_accuracy(self, tmp):
+        acc = float(np.where(self.confuse == 'CORRECT')[0].size) / self.confuse.size * 100
+        return 'Model accuracy: {:5.2f}%'.format(acc)
 
     def apply_data_changes(self, table_data):
         if len(self.selection) != 0:
@@ -180,19 +186,23 @@ class Visualization(dash.Dash):
         self.model_names = [model.__class__.__name__ for model in models]
         self._setup_page()
         self.callback(
-            [Output('figure', 'figure'), Output('tmp', 'children')],
+            Output('figure', 'figure'),
             [Input('figure', 'selectedData'), Input('switch_displayed_data', 'value'),
              Input('apply-button', 'n_clicks'), Input('model-select', 'value')],
             [State('figure', 'relayoutData'), State('table', 'data')]) (self.state.update_figure)
         self.callback(
             Output('table', 'data'),
-            [Input('reset-button', 'n_clicks'), Input('tmp', 'children')]) (self.state.update_table)
+            [Input('reset-button', 'n_clicks'), Input('figure', 'figure')]) (self.state.update_table)
         self.callback(
             Output('fig-shapley', 'figure'),
-            [Input('tmp', 'children')]) (self.state.update_shap_fig)
+            Input('figure', 'figure')) (self.state.update_shap_fig)
         self.callback(
             Output('counterfactual-table', 'data'),
-            [Input('generate-counterfactuals', 'n_clicks')]) (self.state.update_counterfactuals)
+            [Input('generate-counterfactuals', 'n_clicks'), Input('figure', 'figure')]) (self.state.update_counterfactuals)
+        self.callback(
+            Output('class-result', 'children'),
+            Input('figure', 'figure')
+        ) (self.state.update_accuracy)
 
 
     def _setup_page(self):
@@ -217,11 +227,26 @@ class Visualization(dash.Dash):
                 dcc.Dropdown(
                     id='model-select',
                     options=[{'label': mname, 'value': mname} for mname in self.model_names],
-                    value=self.model_names[0]
-                ),      
+                    value=self.model_names[0],
+                    style={'width': '80%'},
+                ),
+                html.Div(
+                    id='class-result',
+                ),
             ]),
-            # Table
-            html.Div(className='cont-table', children=[
+            html.Div(className='cont-shapley', children=[
+                html.P("Feature importance:"),
+                dcc.Graph(
+                    id='fig-shapley',
+                    responsive=True,
+                    config={'responsive': True},
+                    style={'height': '100%', 'width': '100%'},
+                    figure=self.state.update_shap_fig()
+                ),
+                html.Div(id='tmp', style={'display': 'none'})
+            ]),
+            html.Div(className='cont-sel-table', children=[
+                html.P("Selected data:"),
                 dash_table.DataTable(
                     id='table',
                     data=None,
@@ -239,6 +264,10 @@ class Visualization(dash.Dash):
                         },
                     ]
                 ),
+                html.Button('Reset', id='reset-button', n_clicks=0),
+                html.Button('Apply changes', id='apply-button', n_clicks=0),
+            ]),
+            html.Div(className='cont-cfs-table', children=[
                 html.P("Counterfactuals:"),
                 dash_table.DataTable(
                     id='counterfactual-table',
@@ -257,24 +286,9 @@ class Visualization(dash.Dash):
                         },
                     ]
                 ),
-                html.Div(id='table-dropdown-container')
-            ]),
-            # Apply button
-            html.Div(className='cont-apply', children=[
-                html.Button('Reset', id='reset-button', n_clicks=0),
-                html.Button('Apply changes', id='apply-button', n_clicks=0),
+                html.Div(id='table-dropdown-container'),
                 html.Button('Generate Counterfactuals', id='generate-counterfactuals', n_clicks=0),
             ]),
-            html.Div(className='cont-shapley', children=[
-                dcc.Graph(
-                    id='fig-shapley',
-                    responsive=True,
-                    config={'responsive': True},
-                    style={'height': '100%', 'width': '100%'},
-                    figure=self.state.update_shap_fig()
-                ),
-                html.Div(id='tmp', style={'display': 'none'})
-            ])
         ])
 
 if __name__ == "__main__":
